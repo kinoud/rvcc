@@ -28,7 +28,28 @@ class LoopManager:
     def pop(self):
         self.loops.pop()
 
+class FuncRetMgr():
+    def __init__(self):
+        self.inFunc = False
+        self.retSet = []
+
+    def curSet(self):
+        if not self.inFunc:
+            print("Warning: return outside functions.")
+            return None
+        return self.retSet
+    
+    def enterFunc(self):
+        self.inFunc = True
+        self.retSet = []
+
+    def exitFunc(self):
+        self.inFunc = False
+        self.retSet = []
+
 loopMgr = LoopManager()
+funcRetMgr = FuncRetMgr()
+
 
 def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
@@ -96,12 +117,21 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     @register('FuncDef')
     def FuncDef(u):
-        # block = Tblock()
-        # print(u)
-        # TODO
+        funcRetMgr.enterFunc()
+        (res, funcBlock) = dfs(u.body)
+        func_start = TAC('label', LabelSymbol())
+        func_end = TAC('ret', LabelSymbol())
+        block = Tblock()
+        block.appendTAC(func_start)
+        block = Tblock(block, funcBlock)
+        block.appendTAC(func_end)
 
-        (res, block) = dfs(u.body)
+        funcRetMgr.exitFunc()
+        return (res, block)
 
+    @register('Return')
+    def Return(u):
+        (res, block) = dfs(u.expr)
         return (res, block)
 
     @register('Compound')
@@ -232,6 +262,8 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             block.appendTAC(while_back)
             block.appendTAC(while_end)
         
+        for continue_tac in loopMgr.curSet().continues:
+            continue_tac.dest = GotoSymbol(while_start)
         for break_tac in loopMgr.curSet().breaks:
             break_tac.dest = GotoSymbol(while_end)
         loopMgr.pop()
@@ -244,6 +276,14 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         block = Tblock()
         block.appendTAC(tac)
         loopMgr.curSet().breaks.append(tac)
+        return (None, block)
+
+    @register('Continue')
+    def Continue(u):
+        tac = TAC('goto', None)
+        block = Tblock()
+        block.appendTAC(tac)
+        loopMgr.curSet().continues.append(tac)
         return (None, block)
 
     block = dfs(ast)[1]
