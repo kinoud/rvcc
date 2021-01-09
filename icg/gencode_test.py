@@ -28,6 +28,21 @@ class LoopManager:
     def pop(self):
         self.loops.pop()
 
+    def enter_loop(self):
+        '''
+        新push,功能相同
+        '''
+        self.loops.append(LoopOpSet())
+    
+    def quit_loop(self, end_tac):
+        '''
+        新pop,功能相同
+        '''
+        for break_tac in self.curSet().breaks:
+            break_tac.dest = GotoSymbol(end_tac)
+        self.loops.pop()
+    
+        
 class FuncRetMgr():
     def __init__(self):
         self.inFunc = False
@@ -46,6 +61,7 @@ class FuncRetMgr():
     def exitFunc(self):
         self.inFunc = False
         self.retSet = []
+
 
 loopMgr = LoopManager()
 funcRetMgr = FuncRetMgr()
@@ -269,6 +285,46 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         loopMgr.pop()
 
         return (None, block)
+
+    @register('For')
+    def For(u:c_ast.For):
+        block = Tblock()
+        loopMgr.enter_loop()
+        
+        _,init_block = dfs(u.init)
+        for_start = TAC('label', LabelSymbol())
+        cond_res,cond_block = dfs(u.cond)
+        for_end = TAC('label', LabelSymbol())
+        for_forward = TAC('ifz', GotoSymbol(for_end), cond_res)
+        _,body_block = dfs(u.stmt)
+        _,next_block = dfs(u.next)
+        for_back = TAC('goto', GotoSymbol(for_start))
+        
+        
+        block = Tblock(block, init_block)
+        block.appendTAC(for_start)
+        block = Tblock(block, cond_block)
+        block.appendTAC(for_forward)
+        block = Tblock(block, body_block)
+        block = Tblock(block, next_block)
+        block.appendTAC(for_back)
+        block.appendTAC(for_end)
+        
+        loopMgr.quit_loop(for_end)
+        
+        return None, block
+
+
+    @register('DeclList')
+    def DeclList(u:c_ast.DeclList):
+        block = Tblock()
+        for d in u.decls:
+            _, b = dfs(d)
+            block = Tblock(block, b)
+        return None, block
+
+    def Assignment(u:c_ast.Assignment):
+
 
     @register('Break')
     def Break(u):

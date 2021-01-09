@@ -20,9 +20,12 @@ graph TD
 	Decl-->Compound
 	Decl-->FileAST
 	FuncDecl-->Decl
+  TypeDecl-->FuncDecl
 	TypeDecl-->Decl
 	TypeDecl-->ArrayDecl
 	ArrayDecl-->Decl
+  PtrDecl-->Decl
+  PtrDecl-->FuncDecl
 	Struct-->Decl
 	Struct-->TypeDecl
 	IdentifierDecl-->TypeDecl

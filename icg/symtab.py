@@ -363,7 +363,9 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
 
         type_name = type(u.type).__name__
         if type_name == 'FuncDecl':
-            return dfs(u.type)
+            res = dfs(u.type)
+            res['func_symbol'].name = u.name
+            return res
 
         if type_name == 'PtrDecl':
             res = dfs(u.type)
@@ -395,7 +397,7 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
                 x = Symbol(u.name, size=res['size'], type_str=res['type'])
             x.offset = offset
             offset += x.size
-            if in_func: x.offset_type = OFFSET.LOCAL
+            x.offset_type = get_offset_type()
 
         struct_symbol = None
         if res.get('struct_symbol') is not None:
@@ -468,16 +470,38 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
     @register('FuncDecl')
     def func_decl(u:c_ast.FuncDecl):
         nonlocal offset
-        func_symbol = FuncSymbol(u.type.declname)
+        func_symbol = FuncSymbol(None)
         func_symbol.offset = offset
-        func_symbol.size = dfs(u.type)['size']
-        offset += func_symbol.size
+        res = dfs(u.type)
+        func_symbol.size = res['size']
+        func_symbol.type = 'function'
+        
+
+        # x: 返回值的symbol
+
+        type_name = type(u.type).__name__
+        if type_name == 'PtrDecl':
+            # 指针类型
+            x = PointerSymbol('__ret__', res['target_size'], res['target_type'],level=res['level'],
+                offset=offset, offset_type=get_offset_type()
+            )
+        else:
+            # basic类型或者struct类型
+            x = BasicSymbol.gen_symbol('__ret__', res['type'])
+            if x is None:
+                x = Symbol('__ret__', size=res['size'], type_str=res['type'],
+                    offset=offset, offset_type=get_offset_type() 
+                )
+        offset += x.size
+
+        # x end
+
         res = dfs(u.args)
         symbols=[]
         if res.get('param_symbols') is not None:
             symbols = res['param_symbols']
         size = dfs(u.type)['size']
-        return {'func_symbol':func_symbol,'param_symbols':symbols,'size':size}
+        return {'func_symbol':func_symbol,'param_symbols':symbols,'size':size , 'return_symbol':x}
 
     @register('ParamList')
     def paramlist(u:c_ast.ParamList):
@@ -524,7 +548,7 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
         res = dfs(u.decl)
         x = res['func_symbol'] # 代表此函数本身的符号,类型是FuncSymbol
         
-        for sym in res['param_symbols']: # 此函数的参数的符号
+        for sym in [res['return_symbol']] + res['param_symbols']: # 此函数的参数的符号
             t.add_symbol(sym)
             x.add_param_symbol(sym)
 
