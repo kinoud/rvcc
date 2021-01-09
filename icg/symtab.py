@@ -78,7 +78,7 @@ class BasicSymbol(Symbol):
 
     
 
-class SymTab(dict):
+class SymTab():
     def __init__(self, node:c_ast.Node, parent=None):
         self.node = node
         self.parent = parent
@@ -178,7 +178,7 @@ class FuncSymbol(Symbol):
     def __repr__(self):
         ans = super().__repr__()
         params=''
-        for name in self.params_symtab.keys():
+        for name in self.params_symtab.syms.keys():
             params += name+','
         ans+=',params=['+params[:-1]+'],frame_sz='+str(self.frame_size)
         locals=''
@@ -551,6 +551,8 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
         for sym in [res['return_symbol']] + res['param_symbols']: # 此函数的参数的符号
             t.add_symbol(sym)
             x.add_param_symbol(sym)
+
+        
 
         dfs(u.body)
 

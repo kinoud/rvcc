@@ -34,12 +34,15 @@ class LoopManager:
         '''
         self.loops.append(LoopOpSet())
     
-    def quit_loop(self, end_tac):
+    def quit_loop(self, start_tac, end_tac):
         '''
         新pop,功能相同
         '''
         for break_tac in self.curSet().breaks:
             break_tac.dest = GotoSymbol(end_tac)
+        for continue_tac in loopMgr.curSet().continues:
+            continue_tac.dest = GotoSymbol(start_tac)
+        
         self.loops.pop()
     
         
@@ -310,7 +313,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         block.appendTAC(for_back)
         block.appendTAC(for_end)
         
-        loopMgr.quit_loop(for_end)
+        loopMgr.quit_loop(for_start, for_end)
         
         return None, block
 
@@ -323,7 +326,10 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             block = Tblock(block, b)
         return None, block
 
+    @register('Assignment')
     def Assignment(u:c_ast.Assignment):
+        block = Tblock()
+        return None, block
 
 
     @register('Break')
