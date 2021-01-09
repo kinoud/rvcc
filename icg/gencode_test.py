@@ -50,20 +50,29 @@ class FuncRetMgr():
     def __init__(self):
         self.inFunc = False
         self.retSet = []
+        self.retVar = None
 
     def curSet(self):
         if not self.inFunc:
             print("Warning: return outside functions.")
             return None
         return self.retSet
+
+    def curRet(self):
+        if not self.inFunc:
+            print("Warning: return outside functions.")
+            return None
+        return self.retVar
     
-    def enterFunc(self):
+    def enterFunc(self, retVar):
         self.inFunc = True
         self.retSet = []
+        self.retVar = retVar
 
     def exitFunc(self):
         self.inFunc = False
         self.retSet = []
+        self.retVar = None
 
 
 loopMgr = LoopManager()
@@ -93,7 +102,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
         # nonlocal current_tvlist
         nonlocal current_symtab
-        if class_name=='FileAST' or class_name=='For' or class_name=='Compound':
+        if class_name=='FileAST' or class_name=='FuncDef' or class_name=='For' or class_name=='Compound':
             # past_tvlist = current_tvlist
             # current_tvlist = Tvlist(current_tvlist)
             past_symtab = current_symtab
@@ -136,7 +145,9 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     @register('FuncDef')
     def FuncDef(u):
-        funcRetMgr.enterFunc()
+        retVar = sts.get_symtab_of(u).get_symbol('__ret__')
+        funcRetMgr.enterFunc(retVar)
+
         (res, funcBlock) = dfs(u.body)
         func_start = TAC('label', LabelSymbol())
         func_end = TAC('ret', LabelSymbol())
@@ -145,13 +156,26 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         block = Tblock(block, funcBlock)
         block.appendTAC(func_end)
 
+        for tac in funcRetMgr.retSet:
+            tac.dest = GotoSymbol(func_end)
         funcRetMgr.exitFunc()
+
         return (res, block)
 
     @register('Return')
     def Return(u):
         (res, block) = dfs(u.expr)
-        return (res, block)
+
+        goto_ret = TAC('goto', None)
+
+        if not (res is None):
+            return_assign = TAC('=', funcRetMgr.curRet(), res)
+            block.appendTAC(return_assign)
+        
+        block.appendTAC(goto_ret)
+        
+        funcRetMgr.retSet.append(goto_ret)
+        return (None, block)
 
     @register('Compound')
     def Compound(u):
@@ -215,7 +239,6 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     @register('If')
     def If(u):
         (condRes, block) = dfs(u.cond)
-        print((condRes, block))
         if condRes.isConst:
             if condRes.val!=0:
                 (_, block) = dfs(u.iftrue)

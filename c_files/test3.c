@@ -1,17 +1,25 @@
 int x = 1+3u;
 long long y = x+2LL;
+int z = x-y;
+int w = -(3*z);
 
-int main(){
-    int z = x-y;
-    int w = -(3*z);
-    int u = x - 7;
-    int b = x || 1;
+int foo(int x, int y){
     if (x<1){
         int v = 8;
-        int w = v-3;
+        return v;
     }else if (y==1){
-        int p =3;
+        return 3;
     }else{
-        int b = w--;
+        return;
     }
+}
+
+int main(){
+    int b = x || 1;
+    while (y<x){
+        if (y>=x) continue;
+        break;
+        int c = 314;
+    }
+    return (b+2);
 }

@@ -22,7 +22,9 @@ class TAC(object):
         if self.op is None:
             return line + ' <None>'
         line += self.op + " "
-        if isinstance(self.dest, TAC):
+        if self.dest is None:
+            return line + ' <None>'
+        elif isinstance(self.dest, TAC):
             line += str(self.dest.id)
         else:
             line += self.dest.name
