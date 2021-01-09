@@ -74,12 +74,9 @@ def simple_opt(tblock, ltable):
             new_block.appendTAC(TAC(None, None))
         else:
             new_block.appendTAC(cur_tac)
-    print('new_block')
-    print(new_block)
     res_block = TAC_block()
     for tac in new_block.TACs:
         if not(tac.op is None):
             res_block.appendTAC(tac)
-    print(res_block)
     return res_block
                 

@@ -2,12 +2,22 @@ from symtab import Symbol, BasicSymbol as Bsym, SymTab
 
 label_cnt = 0
 
-class LabelSymbol():
+class LabelSymbol(Symbol):
     def __init__(self):
         global label_cnt
-        super.__init__("__label__"+str(label_cnt))
+        super().__init__("__label__"+str(label_cnt))
         label_cnt += 1
         self.type_str = 'label'
+
+goto_cnt = 0
+
+class GotoSymbol(Symbol):
+    def __init__(self, tgtTAC):
+        global goto_cnt
+        super().__init__("__goto("+tgtTAC.dest.name+")_"+str(goto_cnt))
+        goto_cnt += 1
+        self.type_str = 'goto'
+        self.tgt = tgtTAC
 
 def genSimpleConst(val, vtype):
     while len(val)>0 and (val[-1]<'0' or val[-1]>'9'):
@@ -21,7 +31,8 @@ def genSimpleConst(val, vtype):
 
 def genType(op, *args):
     assert(len(args)!=0)
-    # 暂未考虑逻辑运算
+    if op in ['!', '&&', '||', '<', '>', '<=', '>=', '==', '!=']:
+        return 'int'
     unsigned = False
     maxWidth = 0
     for arg in args:

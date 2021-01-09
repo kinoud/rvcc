@@ -3,7 +3,7 @@ from pycparser import CParser
 import argparse
 
 from symtab import symtab_store
-from symconst import genSimpleConst, genType, genConstant
+from symconst import LabelSymbol, GotoSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
 from taccpx import LocalVarTable, simple_opt
 
@@ -70,8 +70,25 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     @register('FuncDef')
     def FuncDef(u):
-        block = Tblock()
+        # block = Tblock()
         # print(u)
+        # TODO
+
+        (res, block) = dfs(u.body)
+
+        return (res, block)
+
+    @register('Compound')
+    def Compound(u):
+        block = Tblock()
+        nodes = u.block_items
+        for node in nodes:
+            (res, newBlock) = dfs(node)
+            block = Tblock(block, newBlock)
+        # TODO
+        lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
+        block = simple_opt(block, lt)
+        # TODO
         return (None, block)
 
     @register('Constant')
@@ -88,9 +105,8 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         return (sym, block)
 
     @register('UnaryOp')
-    def unaryOp(u):
+    def UnaryOp(u):
         (res, block) = dfs(u.expr)
-        print((res, block))
         endv = None
         if res.isConst:
             endv = genConstant(u.op, res)
@@ -104,11 +120,8 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     @register('BinaryOp')
     def BinaryOp(u):
-        # print(u)
         (leftRes, leftBlock) = dfs(u.left)
         (rightRes, rightBlock) = dfs(u.right)
-        # print(leftRes)
-        # print(rightRes)
         block = Tblock(leftBlock, rightBlock)
         endv = None
         if leftRes.isConst and rightRes.isConst:
@@ -123,6 +136,47 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             endv = newTmp
 
         return (endv, block)
+
+    @register('If')
+    def If(u):
+        (condRes, block) = dfs(u.cond)
+        print((condRes, block))
+        if condRes.isConst:
+            if condRes.val!=0:
+                (_, block) = dfs(u.iftrue)
+            elif u.iffalse is None:
+                block = Tblock()
+            else:
+                (_, block) = dfs(u.iffalse)
+        elif u.iffalse is None:
+            goto_endif = TAC('ifz', None, condRes)
+            block.appendTAC(goto_endif)
+            (true_res, true_part) = dfs(u.iftrue)
+            endiftac = TAC('label', LabelSymbol())
+            goto_endif.dest = GotoSymbol(endiftac)
+            block = Tblock(block, true_part)
+            block.appendTAC(endiftac)
+        else:
+            goto_false = TAC('ifz', None, condRes)
+            (true_res, true_part) = dfs(u.iftrue)
+            goto_endif = TAC('goto', None)
+            (false_res, false_part) = dfs(u.iffalse)
+            startfalsetac = TAC('label', LabelSymbol())
+            goto_false.dest = GotoSymbol(startfalsetac)
+            endiftac = TAC('label', LabelSymbol())
+            goto_endif.dest = GotoSymbol(endiftac)
+            block.appendTAC(goto_false)
+            block = Tblock(block, true_part)
+            block.appendTAC(goto_endif)
+            block.appendTAC(startfalsetac)
+            block = Tblock(block, false_part)
+            block.appendTAC(endiftac)
+
+        # print('IF:')
+        # print(block)
+        return (None, block)
+
+
 
     block = dfs(ast)[1]
     return block
