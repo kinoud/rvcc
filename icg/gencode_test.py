@@ -179,6 +179,32 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         # print(block)
         return (None, block)
 
+    @register('While')
+    def While(u):
+        block = Tblock()
+        (condRes, condBlock) = dfs(u.cond)
+        if condRes.isConst:
+            if condRes.val!=0:
+                (_, while_body) = dfs(u.stmt)
+                while_start = TAC('label', LabelSymbol())
+                while_back = TAC('goto', GotoSymbol(while_start))
+                block.appendTAC(while_start)
+                block = Tblock(block, while_body)
+                block.appendTAC(while_back)
+        else:
+            (_, while_body) = dfs(u.stmt)
+            while_start = TAC('label', LabelSymbol())
+            while_end = TAC('label', LabelSymbol())
+            while_forward = TAC('ifz', GotoSymbol(while_end), condRes)
+            while_back = TAC('goto', GotoSymbol(while_start))
+            block.appendTAC(while_start)
+            block = Tblock(block, condBlock)
+            block.appendTAC(while_forward)
+            block = Tblock(block, while_body)
+            block.appendTAC(while_back)
+            block.appendTAC(while_end)
+        
+        return (None, block)
 
 
     block = dfs(ast)[1]
