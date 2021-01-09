@@ -45,6 +45,9 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     @register('FileAST')
     def FileAST(u):
+        '''
+        为每个子节点生成block并合并成1个block, 然后做简单的代码优化(simple_opt)
+        '''
         block = Tblock()
         for v in u.ext:
             block = Tblock(block, dfs(v)[1])

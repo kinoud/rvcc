@@ -2,6 +2,13 @@ from tac import TAC, TAC_block
 from symconst import genSimpleConst, genType, genConstant
 
 class LocalVarTable(object):
+    '''
+    中间代码生成过程中, 对于某个给定的block将它所涉及的所有Symbol, 拉到一个LocalVarTable中. 
+        对用到的Symbol划分了3类:
+        1. tmps 中间代码生成产生的临时变量
+        2. lvars 本节点symtab里含有的Symbol
+        3. gvars 本节点symtab里不含有的Symbol(在本节点的祖先节点里出现)
+    '''
     def __init__(self):
         self.tmps = {}
         self.gvars = {}

@@ -106,7 +106,8 @@ class SymTab(dict):
             if i>0:
                 ans += '\n' + ' '*len_name
             ans += ' ['+repr(x)+']'
-
+        for x in self.tmps.values():
+            ans += '\n' + ' '*len_name + ' (tmp)['+repr(x)+']'
         return ans
 
     def __iter__(self):
