@@ -7,6 +7,29 @@ from symconst import LabelSymbol, GotoSymbol, genSimpleConst, genType, genConsta
 from tac import TAC, TAC_block as Tblock
 from taccpx import LocalVarTable, simple_opt
 
+class LoopOpSet:
+    def __init__(self):
+        self.breaks = []
+        self.continues = []
+
+class LoopManager:
+    def __init__(self):
+        self.loops = []
+
+    def curSet(self):
+        if len(self.loops)==0:
+            print("Warning: break/continue outside loops.")
+            return None
+        return self.loops[-1]
+
+    def push(self):
+        self.loops.append(LoopOpSet())
+
+    def pop(self):
+        self.loops.pop()
+
+loopMgr = LoopManager()
+
 def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     _dfs_function_pool={}
@@ -181,16 +204,21 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     @register('While')
     def While(u):
+
+        loopMgr.push()
+
         block = Tblock()
         (condRes, condBlock) = dfs(u.cond)
         if condRes.isConst:
             if condRes.val!=0:
                 (_, while_body) = dfs(u.stmt)
                 while_start = TAC('label', LabelSymbol())
+                while_end = TAC('label', LabelSymbol())
                 while_back = TAC('goto', GotoSymbol(while_start))
                 block.appendTAC(while_start)
                 block = Tblock(block, while_body)
                 block.appendTAC(while_back)
+                block.appendTAC(while_end)
         else:
             (_, while_body) = dfs(u.stmt)
             while_start = TAC('label', LabelSymbol())
@@ -204,8 +232,19 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             block.appendTAC(while_back)
             block.appendTAC(while_end)
         
+        for break_tac in loopMgr.curSet().breaks:
+            break_tac.dest = GotoSymbol(while_end)
+        loopMgr.pop()
+
         return (None, block)
 
+    @register('Break')
+    def Break(u):
+        tac = TAC('goto', None)
+        block = Tblock()
+        block.appendTAC(tac)
+        loopMgr.curSet().breaks.append(tac)
+        return (None, block)
 
     block = dfs(ast)[1]
     return block
