@@ -93,8 +93,8 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         return _register
 
     def dfs(u:c_ast.Node):
-        if u is None:
-            return (None, Tblock())
+        if u is None:                       # deliver empty node
+            return (Tblock(), None, None)
 
         class_name = type(u).__name__
         if _dfs_function_pool.get(class_name) is None:
@@ -108,13 +108,23 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             # current_tvlist = Tvlist(current_tvlist)
             past_symtab = current_symtab
             current_symtab = sts.get_symtab_of(u)
-            (endv, block) = dfs_fn(u)
+            (block, endv, endtype) = dfs_fn(u)
             current_symtab = past_symtab
             # current_tvlist = past_tvlist
         else:
-            (endv, block) = dfs_fn(u)
+            (block, endv, endtype) = dfs_fn(u)
 
-        return (endv, block)
+        return (block, endv, endtype)
+
+    def lval_to_rval(block, res, resType):
+        nonlocal current_symtab
+        if resType=='pvar':
+            newTmp = current_symtab.gen_tmp_symbol(res.type.target_type)
+            newTAC = TAC('get', newTmp, res)
+            block.appendTAC(newTAC)
+            res = newTmp
+            resType = 'var'
+        return (block, res, resType)
 
     @register('FileAST')
     def FileAST(u):
@@ -123,33 +133,34 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         '''
         block = Tblock()
         for v in u.ext:
-            block = Tblock(block, dfs(v)[1])
+            (newBlock, _, _) = dfs(v)
+            block = Tblock(block, newBlock)
 
         lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
         block = simple_opt(block, lt)
         # TODO
 
-        return (None, block)
+        return (block, None, None)
 
     @register('Decl')
     def Decl(u:c_ast.Decl):
         block = Tblock()
         if u.init is not None:
-            (rtmp, rblock) = dfs(u.init)
+            (rblock, rtmp, _) = dfs(u.init)
             u_sym = sts.get_symtab_of(u).get_symbol(u.name)
             newTAC = TAC("=", u_sym, rtmp)
             block = Tblock(block, rblock)
             block.appendTAC(newTAC)
 
         # print(block)
-        return (None, block)
+        return (block, None, None)
 
     @register('FuncDef')
     def FuncDef(u):
         retVar = sts.get_symtab_of(u).get_symbol('__ret__')
         funcRetMgr.enterFunc(retVar)
 
-        (_, funcBlock) = dfs(u.body)
+        (funcBlock, _, _) = dfs(u.body)
         func_start = TAC('label', LabelSymbol())
         func_end = TAC('ret', LabelSymbol())
         block = Tblock()
@@ -161,11 +172,11 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             tac.dest = GotoSymbol(func_end)
         funcRetMgr.exitFunc()
 
-        return (None, block)
+        return (block, None, None)
 
     @register('Return')
     def Return(u):
-        (res, block) = dfs(u.expr)
+        (block, res, _) = dfs(u.expr)
 
         goto_ret = TAC('goto', None)
 
@@ -176,51 +187,75 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         block.appendTAC(goto_ret)
         
         funcRetMgr.retSet.append(goto_ret)
-        return (None, block)
+        return (block, None, None)
 
     @register('Compound')
     def Compound(u):
         block = Tblock()
         nodes = u.block_items
         for node in nodes:
-            (res, newBlock) = dfs(node)
+            (newBlock, _, _) = dfs(node)
             block = Tblock(block, newBlock)
         # TODO
         lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
         block = simple_opt(block, lt)
         # TODO
-        return (None, block)
+        return (block, None, None)
 
     @register('Constant')
     def Constant(u):
         block = Tblock()
         endv = genSimpleConst(u.value, BasicType(u.type))
-        return (endv, block)
+        return (block, endv, 'const')
 
     @register('ID')
     def ID(u):
         block = Tblock()
         name = u.name
         sym = sts.get_symtab_of(u).get_symbol(name)
-        return (sym, block)
+        return (block, sym, 'var')
 
     @register('Assignment')
     def Assignment(u:c_ast.Assignment):
-        (lval, lblock) = dfs(u.lvalue)
-        (rval, rblock) = dfs(u.rvalue)
+        (lblock, lval, ltype) = dfs(u.lvalue)
+        (rblock, rval, rtype) = lval_to_rval(*dfs(u.rvalue))
+
         if u.op=='=':
             newTAC = TAC(u.op, lval, rval)
         else:
             newOp = u.op[:-1]
             newTAC = TAC(newOp, lval, lval, rval)
+
+        if ltype=='pvar':
+            newTAC.op='set'
+        elif ltype!='var':
+            print('Error: lvalue cannot be assigned.')
+            return (Tblock(), None, None)
+
         block = Tblock(lblock, rblock)
         block.appendTAC(newTAC)
-        return (lval, block)
+            
+        # TODO
+        #block = left_val_handler(block)
+        return (block, lval, ltype)
 
     @register('UnaryOp')
     def UnaryOp(u):
         # TODO                   // for ptr
-        (res, block) = dfs(u.expr)
+        (block, res, resType) = dfs(u.expr)
+
+        if u.op=='&':
+            if resType == 'pvar':
+                return (block, res, 'tmp')
+            elif resType!='var':
+                print('Not lvalue!')
+                return (block, None, None)
+        else:
+            (block, res, resType) = lval_to_rval(block, res, resType)
+            
+        if u.op=='*':
+            return (block, res, 'pvar')
+
         endv = None
         if res.isConst:
             endv = genConstant(u.op, res)
@@ -230,12 +265,18 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             newTAC = TAC(u.op, newTmp, res)
             block.appendTAC(newTAC)
             endv = newTmp
-        return (endv, block)
+        '''  废弃
+        if u.op=='&':
+            # lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
+            # TODO
+            block = left_val_handler(block)
+        '''
+        return (block, endv, 'tmp')
 
     @register('BinaryOp')
     def BinaryOp(u):
-        (leftRes, leftBlock) = dfs(u.left)
-        (rightRes, rightBlock) = dfs(u.right)
+        (leftBlock, leftRes, _) = lval_to_rval(*dfs(u.left))
+        (rightBlock, rightRes, _) = lval_to_rval(*dfs(u.right))
         block = Tblock(leftBlock, rightBlock)
         endv = None
         if leftRes.isConst and rightRes.isConst:
@@ -280,31 +321,31 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
                 block.appendTAC(newTAC)
             endv = newTmp
 
-        return (endv, block)
+        return (block, endv, 'tmp')
 
     @register('If')
     def If(u):
-        (condRes, block) = dfs(u.cond)
+        (block, condRes, _) = dfs(u.cond)
         if condRes.isConst:
             if condRes.val!=0:
-                (_, block) = dfs(u.iftrue)
+                (block, _, _) = dfs(u.iftrue)
             elif u.iffalse is None:
                 block = Tblock()
             else:
-                (_, block) = dfs(u.iffalse)
+                (block, _, _) = dfs(u.iffalse)
         elif u.iffalse is None:
             goto_endif = TAC('ifz', None, condRes)
             block.appendTAC(goto_endif)
-            (true_res, true_part) = dfs(u.iftrue)
+            (true_part, _, _) = dfs(u.iftrue)
             endiftac = TAC('label', LabelSymbol())
             goto_endif.dest = GotoSymbol(endiftac)
             block = Tblock(block, true_part)
             block.appendTAC(endiftac)
         else:
             goto_false = TAC('ifz', None, condRes)
-            (_, true_part) = dfs(u.iftrue)
+            (true_part, _, _) = dfs(u.iftrue)
             goto_endif = TAC('goto', None)
-            (_, false_part) = dfs(u.iffalse)
+            (false_part, _, _) = dfs(u.iffalse)
             startfalsetac = TAC('label', LabelSymbol())
             goto_false.dest = GotoSymbol(startfalsetac)
             endiftac = TAC('label', LabelSymbol())
@@ -316,7 +357,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             block = Tblock(block, false_part)
             block.appendTAC(endiftac)
 
-        return (None, block)
+        return (block, None, None)
 
     @register('While')
     def While(u):
@@ -324,10 +365,10 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         loopMgr.push()
 
         block = Tblock()
-        (condRes, condBlock) = dfs(u.cond)
+        (condBlock, condRes, _) = dfs(u.cond)
         if condRes.isConst:
             if condRes.val!=0:
-                (_, while_body) = dfs(u.stmt)
+                (while_body, _, _) = dfs(u.stmt)
                 while_start = TAC('label', LabelSymbol())
                 while_end = TAC('label', LabelSymbol())
                 while_back = TAC('goto', GotoSymbol(while_start))
@@ -336,7 +377,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
                 block.appendTAC(while_back)
                 block.appendTAC(while_end)
         else:
-            (_, while_body) = dfs(u.stmt)
+            (while_body, _, _) = dfs(u.stmt)
             while_start = TAC('label', LabelSymbol())
             while_end = TAC('label', LabelSymbol())
             while_forward = TAC('ifz', GotoSymbol(while_end), condRes)
@@ -354,20 +395,20 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             break_tac.dest = GotoSymbol(while_end)
         loopMgr.pop()
 
-        return (None, block)
+        return (block, None, None)
 
     @register('For')
     def For(u:c_ast.For):
         block = Tblock()
         loopMgr.enter_loop()
         
-        _,init_block = dfs(u.init)
+        (init_block, _, _) = dfs(u.init)
         for_start = TAC('label', LabelSymbol())
         cond_res,cond_block = dfs(u.cond)
         for_end = TAC('label', LabelSymbol())
         for_forward = TAC('ifz', GotoSymbol(for_end), cond_res)
-        _,body_block = dfs(u.stmt)
-        _,next_block = dfs(u.next)
+        (body_block, _, _) = dfs(u.stmt)
+        (next_block, _, _) = dfs(u.next)
         for_back = TAC('goto', GotoSymbol(for_start))
         
         
@@ -382,16 +423,16 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         
         loopMgr.quit_loop(for_start, for_end)
         
-        return None, block
+        return (block, None, None)
 
 
     @register('DeclList')
     def DeclList(u:c_ast.DeclList):
         block = Tblock()
         for d in u.decls:
-            _, b = dfs(d)
+            (b, _, _) = dfs(d)
             block = Tblock(block, b)
-        return None, block
+        return (block, None, None)
 
     @register('Break')
     def Break(u):
@@ -399,7 +440,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         block = Tblock()
         block.appendTAC(tac)
         loopMgr.curSet().breaks.append(tac)
-        return (None, block)
+        return (block, None, None)
 
     @register('Continue')
     def Continue(u):
@@ -407,9 +448,9 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         block = Tblock()
         block.appendTAC(tac)
         loopMgr.curSet().continues.append(tac)
-        return (None, block)
+        return (block, None, None)
 
-    block = dfs(ast)[1]
+    block, _, _ = dfs(ast)
     return block
 
 if __name__=='__main__':
