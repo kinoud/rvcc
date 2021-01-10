@@ -2,6 +2,7 @@ from pycparser import c_ast
 from pycparser import CParser
 import argparse
 
+from symbol import BasicType
 from symtab import symtab_store
 from symconst import LabelSymbol, GotoSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
@@ -193,7 +194,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     @register('Constant')
     def Constant(u):
         block = Tblock()
-        endv = genSimpleConst(u.value, u.type)
+        endv = genSimpleConst(u.value, BasicType(u.type))
         return (endv, block)
 
     @register('ID')
@@ -218,6 +219,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     @register('UnaryOp')
     def UnaryOp(u):
+        # TODO                   // for ptr
         (res, block) = dfs(u.expr)
         endv = None
         if res.isConst:
@@ -245,10 +247,10 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             # special
             if u.op=="&&":
                 tac_1 = TAC('ifz', None, leftRes)
-                tac_2 = TAC('!=', newTmp, rightRes, genSimpleConst('0', 'int'))
+                tac_2 = TAC('!=', newTmp, rightRes, genSimpleConst('0', BasicType('int')))
                 tac_3 = TAC('goto', None)
                 tac_4 = TAC('label', LabelSymbol())
-                tac_5 = TAC('=', newTmp, genSimpleConst('0', 'int'))
+                tac_5 = TAC('=', newTmp, genSimpleConst('0', BasicType('int')))
                 tac_6 = TAC('label', LabelSymbol())
                 tac_1.dest = GotoSymbol(tac_4)
                 tac_3.dest = GotoSymbol(tac_6)
@@ -260,10 +262,10 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
                 block.appendTAC(tac_6)
             elif u.op=="||":
                 tac_1 = TAC('ifz', None, leftRes)
-                tac_2 = TAC('=', newTmp, genSimpleConst('1', 'int'))
+                tac_2 = TAC('=', newTmp, genSimpleConst('1', BasicType('int')))
                 tac_3 = TAC('goto', None)
                 tac_4 = TAC('label', LabelSymbol())
-                tac_5 = TAC('!=', newTmp, rightRes, genSimpleConst('0', 'int'))
+                tac_5 = TAC('!=', newTmp, rightRes, genSimpleConst('0', BasicType('int')))
                 tac_6 = TAC('label', LabelSymbol())
                 tac_1.dest = GotoSymbol(tac_4)
                 tac_3.dest = GotoSymbol(tac_6)
@@ -277,8 +279,6 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
                 newTAC = TAC(u.op, newTmp, leftRes, rightRes)
                 block.appendTAC(newTAC)
             endv = newTmp
-
-
 
         return (endv, block)
 

@@ -1,11 +1,20 @@
-from symtab import Symbol, BasicSymbol as Bsym, SymTab
+
+from symbol import Type, BasicType, Symbol, BasicSymbol as Bsym
+from symtab import SymTab
+
+class VirtualType(Type):
+    def __init__(self, name):
+        super().__init__(name, 0)
+
+TYPE_LABEL = VirtualType('label')
+TYPE_GOTO = VirtualType('goto')
 
 label_cnt = 0
 
 class LabelSymbol(Symbol):
     def __init__(self):
         global label_cnt
-        super().__init__("__label__"+str(label_cnt))
+        super().__init__("__label__"+str(label_cnt), TYPE_LABEL)
         label_cnt += 1
         self.type_str = 'label'
 
@@ -14,7 +23,7 @@ goto_cnt = 0
 class GotoSymbol(Symbol):
     def __init__(self, tgtTAC):
         global goto_cnt
-        super().__init__("__goto("+tgtTAC.dest.name+")_"+str(goto_cnt))
+        super().__init__("__goto("+tgtTAC.dest.name+")_"+str(goto_cnt), TYPE_GOTO)
         goto_cnt += 1
         self.type_str = 'goto'
         self.tgt = tgtTAC
@@ -22,24 +31,27 @@ class GotoSymbol(Symbol):
 def genSimpleConst(val, vtype):
     while len(val)>0 and (val[-1]<'0' or val[-1]>'9'):
         val = val[:-1]
-    name = val+'('+vtype+')'
+
+    name = val+'('+str(vtype)+')'
+    
     bsym = Bsym(name, vtype)
+
     bsym.isTmp = True
     bsym.isConst = True
     bsym.val = int(val)
     return bsym
 
-def genType(op, *args):
+def genType(op, *args)->BasicType:
     assert(len(args)!=0)
     if op in ['!', '&&', '||', '<', '>', '<=', '>=', '==', '!=']:
-        return 'int'
+        return BasicType('int')
     unsigned = False
     maxWidth = 0
+
     for arg in args:
-        sym = Bsym.gen_symbol("", arg.type)
-        if sym.unsigned:
+        if arg.type.name.startswith('unsigned'):
             unsigned = True
-        maxWidth = max(maxWidth, sym.size)
+        maxWidth = max(maxWidth, arg.type.size)
     ansType = "long long"
     if maxWidth==1:
         ansType = "char"
@@ -49,7 +61,7 @@ def genType(op, *args):
         ansType = "int"
     if unsigned:
         ansType = "unsigned "+ ansType
-    return ansType
+    return BasicType(ansType)
 
 
 def genConstant(op, *args):
@@ -57,15 +69,13 @@ def genConstant(op, *args):
 
     ansType = genType(op, *args)
 
-    sym = Bsym.gen_symbol("", ansType )
-    unsigned = sym.unsigned
-    maxWidth = sym.size * 8
+    unsigned = ansType.name.startswith('unsigned')
+    maxWidth = ansType.size * 8
 
     vals = []
     for arg in args:
-        sym = Bsym.gen_symbol("", arg.type)
         val = arg.val
-        if unsigned and (not sym.unsigned):
+        if unsigned and (not arg.type.name.startswith('unsigned')):
             print('Waring : Implicit cast from signed to unsigned')
             if val<0:
                 val = val + 1 << (maxWidth-1)
@@ -85,6 +95,52 @@ def genConstant(op, *args):
             ans *=val
     elif op=='/':
         ans = vals[0] // vals[1]
+    elif op =='!':
+        if vals[0] == 0:
+            ans = 1
+        else:
+            ans = 0
+    elif op == '&&':
+        if vals[0] and vals[1]:
+            ans = 1
+        else:
+            ans = 0
+    elif op == '||':
+        if vals[0] or vals[1]:
+            ans = 1
+        else:  
+            ans = 0
+    elif op == '<':
+        if vals[0] < vals[1]:
+            ans = 1
+        else:
+            ans = 0
+    elif op == '>':
+        if vals[0] > vals[1]:
+            ans = 1
+        else:
+            ans = 0
+    elif op == '<=':
+        if vals[0] <= vals[1]:
+            ans = 1
+        else:
+            ans = 0
+    elif op == '>=':
+        if vals[0] >= vals[1]:
+            ans = 1
+        else:
+            ans = 0
+    elif op == '==':
+        if vals[0] == vals[1]:
+            ans = 1
+        else:
+            ans = 0
+    elif op == '!=':
+        if vals[0] != vals[1]:
+            ans = 1
+        else:
+            ans = 0
+
     while ans>=(1 << (maxWidth-1)):
         ans -= 1 << maxWidth
     while ans<(-(1 << (maxWidth-1))):

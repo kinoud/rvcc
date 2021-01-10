@@ -69,7 +69,7 @@ class SymTab():
 
     def gen_tmp_symbol(self, varType):
         varName = "____"+str(len(self.tmps))
-        newTmp = BasicSymbol.gen_symbol(varName,  varType)
+        newTmp = BasicSymbol(varName, varType)
         newTmp.isTmp = True
         self.tmps[varName] = newTmp
         return newTmp
