@@ -8,12 +8,11 @@ class Type(object):
         self.size = size
 
     def __repr__(self):
-        return self.name+'('+str(self.size)+')'
+        return self.name+'(sz='+str(self.size)+')'
 
     @abc.abstractmethod
     def gen_symbol(self, name:str):
         pass
-
 
 class StructType(Type):
     def __init__(self, name, member_types:list):
@@ -78,6 +77,16 @@ class PtrType(Type):
     def gen_symbol(self, name):
         return PtrSymbol(name, self)
 
+    def get_level(self):
+        if isinstance(self.target_type, PtrType):
+            return self.target_type.get_level()+1
+        return 1
+
+    def __repr__(self):
+        ans = super().__repr__()
+        ans = ans[:-1] + ',target=' + repr(self.target_type) + ')'
+        return ans
+
 # Type end
 
 # Symbol begin
@@ -104,11 +113,6 @@ class StructSymbol(Symbol):
 class PtrSymbol(Symbol):
     def __init__(self, name, ptr_type:PtrType):
         super().__init__(name, ptr_type)
-
-    def __repr__(self):
-        ans = super().__repr__()
-        ans += ',ttype=' + repr(self.type)
-        return ans
 
 class FuncSymbol(Symbol):
     '''

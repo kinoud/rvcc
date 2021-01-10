@@ -79,6 +79,7 @@ Decl的两个成员以及它们可能的类型(未必全面):
 - type
   - TypeDecl
     - type=IdentifierType
+  - PtrDecl
 
 ## ArrayDecl
 
