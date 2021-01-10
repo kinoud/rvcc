@@ -42,15 +42,26 @@ class SymTab():
 
     def __repr__(self):
         ans = type(self.node).__name__ 
+        once_flag = True
         len_name = len(ans)
-        for i,x in enumerate(self.syms.values()):
-            if i>0:
-                ans += '\n' + ' '*len_name
-            ans += ' ['+repr(x)+']'
-        for x in self.tmps.values():
-            ans += '\n' + ' '*len_name + ' (tmp)['+repr(x)+']'
+        def prefix():
+            nonlocal once_flag
+            if once_flag:
+                once_flag = False
+                return ' '
+            else:
+                return '\n ' + ' '*len_name
+    
         for k,v in self.types.items():
-            ans += '\n' + ' '*len_name + ' (type '+name+')['+repr(v)+']'
+            ans += prefix()
+            ans += '(type \033[1;33m%s\033[0m)['%k+repr(v)+']'
+        for i,x in enumerate(self.syms.values()):
+            ans += prefix()
+            ans += '['+repr(x)+']'
+        for x in self.tmps.values():
+            ans += prefix()
+            ans += '(tmp)['+repr(x)+']'
+        
         return ans
 
     def __iter__(self):
@@ -226,40 +237,25 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
         return {'symbol':x, 'struct_type':struct_type}
 
     @register('Struct')
-    def struct(u:c_ast.Struct)->Type:
+    def struct(u:c_ast.Struct)->StructType:
         '''
         语法树中出现Struct有两种情况(暂时发现两种),
         一是定义一个struct,二是使用一个struct.
         使用struct时,decls=None.
-
-        decls不是None时,返回一个符号,否则只返回size
         '''
-        nonlocal sts, offset, in_struct
-
+        nonlocal sts
         # 使用一个struct,而不是定义它
         t = sts.get_symtab_of(u)
-
         if u.decls is None:
             return t.get_type(u.name) # u.name 是struct的名字(不含'struct')
 
         # 定义一个struct
-        struct_symbol = StructSymbol(type_str)
+        member_types = {}
         for d in u.decls:
-            _,typ = dfs(d) 
-            if typ is not None:
-                t.add_symbol(res['struct_symbol'])
-                t.add
-            x = res['symbol']
-            x.offset_type = OFFSET.LOCAL
-            struct_symbol.add_member_symbol(x)
-            size += x.size
-
-        struct_symbol.size = size
-
-        in_struct = False
-        offset = saved_offset
-
-        return {'size':size, 'struct_symbol':struct_symbol, 'type':type_str}
+            sym = dfs(d)['symbol'] # 不允许Struct内嵌套定义Struct
+            if sym is not None:
+                member_types[sym.name] = sym.type
+        return StructType(u.name, member_types)
 
     @register('TypeDecl')
     def type_decl(u:c_ast.TypeDecl) -> Type:

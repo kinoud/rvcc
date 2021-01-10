@@ -15,9 +15,9 @@ class Type(object):
         pass
 
 class StructType(Type):
-    def __init__(self, name, member_types:list):
+    def __init__(self, name, member_types:dict):
         sz = 0
-        for t in member_types:
+        for t in member_types.values():
             sz += t.size
         self.member_types = member_types
         super().__init__(name, sz)
@@ -109,7 +109,7 @@ class BasicSymbol(Symbol):
 class StructSymbol(Symbol):
     def __init__(self, name, struct_type:StructType):
         super().__init__(name, struct_type)
-
+        
 class PtrSymbol(Symbol):
     def __init__(self, name, ptr_type:PtrType):
         super().__init__(name, ptr_type)
