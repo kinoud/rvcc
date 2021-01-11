@@ -2,9 +2,9 @@ from pycparser import c_ast
 from pycparser import CParser
 import argparse
 
-from symbol import BasicType
+from symbol import BasicType, PtrType, StructType, PtrSymbol, StructSymbol
 from symtab import symtab_store
-from symconst import LabelSymbol, GotoSymbol, genSimpleConst, genType, genConstant
+from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
 from taccpx import LocalVarTable, simple_opt
 
@@ -119,7 +119,19 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     def lval_to_rval(block, res, resType):
         nonlocal current_symtab
         if resType=='pvar':
-            newTmp = current_symtab.gen_tmp_symbol(res.type.target_type)
+            targetType = res.type.target_type
+
+            if isinstance(targetType, BasicType):
+                newTmp = current_symtab.gen_tmp_basic_symbol(targetType)
+            elif isinstance(targetType, PtrType): # 目前似乎还用不到
+                newtgt = targetType.target_type
+                newTmp = current_symtab.gen_tmp_ptr_symbol(newtgt)
+            elif isinstance(targetType, StructType):
+                newTmp = current_symtab.gen_tmp_struct_symbol(targetType)
+            else: # TODO
+                # 暂时这么做，应该会有bug
+                newTmp = current_symtab.gen_tmp_basic_symbol(targetType)
+            
             newTAC = TAC('get', newTmp, res)
             block.appendTAC(newTAC)
             res = newTmp
@@ -215,6 +227,53 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         sym = sts.get_symtab_of(u).get_symbol(name)
         return (block, sym, 'var')
 
+    @register('StructRef')
+    def StructRef(u):
+        if u.type=='.':
+            (nameBlock, nameVal, _) = lval_to_rval(*dfs(u.name))
+            #(fieldBlock, fieldVal, fieldType) = dfs(u.field)
+            '''
+            print((nameBlock, nameVal, _))
+
+            print(nameVal)
+            print(isinstance(nameVal, StructSymbol))
+            print(nameVal.type)
+            print(isinstance(nameVal.type, StructType))
+            '''
+            
+            if not (isinstance(nameVal, StructSymbol) and isinstance(nameVal.type, StructType)):
+                print('Error: illeagal element before \'.\' ')     # .前面的应该只能是结构体变量吧
+                return (Tblock(), None, None)
+
+            member_types = nameVal.type.member_types
+
+            if type(u.field).__name__!='ID':        # 访问结构体成员应该是只能用名字吧
+                print('Error: illeagal element after \'.\' ')
+                return (Tblock(), None, None)
+
+            field_type = member_types.get(u.field.name)
+            if field_type is None:
+                print('Error: this struct not has this member. ')
+                return (Tblock(), None, None)
+
+            endvType = PtrType(field_type)
+            newTmp = current_symtab.gen_tmp_basic_symbol(endvType)
+            newTAC = TAC('offset', newTmp, nameVal, FakeSymbol(u.field.name))
+            block = Tblock(nameBlock)
+            block.appendTAC(newTAC)
+
+            print(block)
+            print(newTmp)
+
+            return (block, newTmp, 'pvar')
+
+        elif u.type=='->':
+            pass # 先不考虑
+        else:
+            # 应该不会有其他情况吧
+            return None
+        return (Tblock(), None, None)
+
     @register('Assignment')
     def Assignment(u:c_ast.Assignment):
         (lblock, lval, ltype) = dfs(u.lvalue)
@@ -261,7 +320,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             endv = genConstant(u.op, res)
         else:
             endvType = genType(u.op, res)
-            newTmp = current_symtab.gen_tmp_symbol(endvType)
+            newTmp = current_symtab.gen_tmp_basic_symbol(endvType)
             newTAC = TAC(u.op, newTmp, res)
             block.appendTAC(newTAC)
             endv = newTmp
@@ -284,7 +343,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             # print(endv)
         else:
             endvType = genType(u.op, leftRes, rightRes)
-            newTmp = current_symtab.gen_tmp_symbol(endvType)
+            newTmp = current_symtab.gen_tmp_basic_symbol(endvType)
             # special
             if u.op=="&&":
                 tac_1 = TAC('ifz', None, leftRes)

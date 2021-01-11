@@ -78,12 +78,30 @@ class SymTab():
             return None
         return self.parent.get_tmp_symbol(name)
 
-    def gen_tmp_symbol(self, varType):
+    def gen_tmp_basic_symbol(self, varType):
         varName = "____"+str(len(self.tmps))
         newTmp = BasicSymbol(varName, varType)
         newTmp.isTmp = True
         self.tmps[varName] = newTmp
         return newTmp
+
+    def gen_tmp_struct_symbol(self, structType):
+        varName = "____"+str(len(self.tmps))
+        newTmp = StructSymbol(varName, structType)
+        newTmp.isTmp = True
+        self.tmps[varName] = newTmp
+        return newTmp        
+
+    # 暂时还没用到
+    def gen_tmp_ptr_symbol(self, targetType):
+        varName = "____"+str(len(self.tmps))
+        newTmp = PtrSymbol(varName, targetType)
+        newTmp.isTmp = True
+        self.tmps[varName] = newTmp
+        return newTmp
+    
+
+
 class SymTabStore():
     def __init__(self):
         self._symtab={} # dict[c_ast.Node]->SymTab

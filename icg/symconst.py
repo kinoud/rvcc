@@ -1,5 +1,5 @@
 
-from symbol import Type, BasicType, Symbol, BasicSymbol as Bsym
+from symbol import Type, BasicType, PtrType, Symbol, BasicSymbol as Bsym
 from symtab import SymTab
 
 class VirtualType(Type):
@@ -8,6 +8,8 @@ class VirtualType(Type):
 
 TYPE_LABEL = VirtualType('label')
 TYPE_GOTO = VirtualType('goto')
+
+TYPE_FAKE = VirtualType('fake')
 
 label_cnt = 0
 
@@ -27,6 +29,12 @@ class GotoSymbol(Symbol):
         goto_cnt += 1
         self.type_str = 'goto'
         self.tgt = tgtTAC
+
+class FakeSymbol(Symbol):
+    # FakeSymbol 只是为了占位，不能进符号表，名字可以任意起
+    def __init__(self, name):
+        super().__init__(name, TYPE_FAKE)
+        self.type_str = name
 
 def genSimpleConst(val, vtype):
     while len(val)>0 and (val[-1]<'0' or val[-1]>'9'):
@@ -61,6 +69,20 @@ def genType(op, *args)->BasicType:
         ansType = "int"
     if unsigned:
         ansType = "unsigned "+ ansType
+
+    isPtr = False
+    ptrType = None
+    for arg in args:
+        if isinstance(arg.type, PtrType):
+            if isPtr and not (op=='-' and len(args)==2 and ptrType == arg.type):
+                print('Error: invaild pointer operate.')
+                return None
+            else:
+                isPtr = True
+                ptrType = arg.type
+    if isPtr:
+        return ptrType
+
     return BasicType(ansType)
 
 
