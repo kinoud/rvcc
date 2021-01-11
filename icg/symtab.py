@@ -109,9 +109,10 @@ class SymTabStore():
         node_parent = {}
         def dfs(u:c_ast.Node):
             nonlocal node_parent
-            for (v_name, v) in u.chidlren():
+            for (v_name, v) in u.children():
                 node_parent[v] = u
                 dfs(v)
+        dfs(ast)
         self._node_parent = node_parent
 
     def get_symtab_of(self, node:c_ast.Node) -> SymTab:
@@ -120,7 +121,7 @@ class SymTabStore():
             pnode = self._node_parent.get(node)
             if pnode is None:
                 return None
-            return get_symtab_of(pnode)
+            return self.get_symtab_of(pnode)
         return self._symtab.get(node)
     
     def add_symtab(self, node:c_ast.Node, symtab:SymTab):
