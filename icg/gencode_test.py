@@ -195,8 +195,6 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
         member_types = struct_ptr.type.target_type.member_types
 
-        print(member_types)
-
         endv = current_symtab.gen_tmp_struct_symbol(struct_ptr.type.target_type)
 
         block = Tblock()
@@ -344,11 +342,6 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         for arg in reversed(argList):
             (thisBlock, thisEndv, thisType) = dfs(arg)
 
-            print('arg')
-            print(arg)
-            print(thisEndv)
-            print(thisType)
-
             if thisType!='pvar':
                 argBlock = Tblock(argBlock, thisBlock)
                 paramList.append(thisEndv)
@@ -403,6 +396,18 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         (nameBlock, nameVal, nameType) = dfs(u.name)
         (subsBlock, subsVal, subsType) = lval_to_rval(*dfs(u.subscript))
 
+        if not isinstance(nameVal.type, PtrType):
+            print('Error: only pointer/array can be indexed.')
+            newType = None
+        
+        if nameType=='var':
+            newType = nameVal.type
+        elif nameType=='pvar':
+            newType = PtrType(nameVal.type.target_type.ele_type)
+        else:
+            print('Error: temp/const values cannot be indexed.')
+            newType = None
+        '''
         if isinstance(nameVal.type, ArrayType):
             print('Maybe impossible.')          # 按理说已经在ID模块直接转化掉
             newType = PtrType(nameVal.type.ele_type)
@@ -411,19 +416,16 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         else: # 应该是这样吧
             print('Error: only pointer/array can be indexed.')
             newType = None
+        '''
 
         if not isinstance(subsVal, BasicSymbol):
             print('Error: subscript must be integer.')
         
         newTmp = current_symtab.gen_tmp_ptr_symbol(newType)
-        '''
-        print('newTmp')
-        print(newTmp)
-        print(newTmp.type)
-        '''
         newTAC = TAC('+', newTmp, nameVal, subsVal)
         block = Tblock(nameBlock, subsBlock)
         block.appendTAC(newTAC)
+
         return (block, newTmp, 'pvar')
 
     @register('StructRef')
