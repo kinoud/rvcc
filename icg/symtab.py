@@ -103,10 +103,24 @@ class SymTab():
 
 
 class SymTabStore():
-    def __init__(self):
+    def __init__(self, ast:c_ast.Node):
         self._symtab={} # dict[c_ast.Node]->SymTab
+        
+        node_parent = {}
+        def dfs(u:c_ast.Node):
+            nonlocal node_parent
+            for (v_name, v) in u.chidlren():
+                node_parent[v] = u
+                dfs(v)
+        self._node_parent = node_parent
 
     def get_symtab_of(self, node:c_ast.Node) -> SymTab:
+        t = self._symtab.get(node)
+        if t is None:
+            pnode = self._node_parent.get(node)
+            if pnode is None:
+                return None
+            return get_symtab_of(pnode)
         return self._symtab.get(node)
     
     def add_symtab(self, node:c_ast.Node, symtab:SymTab):
@@ -131,7 +145,7 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
     '''
 
     # 符号表仓库 最后要返回的结果
-    sts = SymTabStore()
+    sts = SymTabStore(ast)
 
     '''
     辅助函数和变量
@@ -158,7 +172,7 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
     # 它的内容总是当前遍历过程中正在处理的节点的符号表
 
 
-    def dfs(u:c_ast.Node, **kwargs):
+    def dfs(u:c_ast.Node, required = False, **kwargs):
         '''
         此函数将根据u的类型为它选择相应的具体的dfs函数去处理,
         与此同时维护符号表的建立与current_symtab的值
@@ -175,6 +189,8 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
 
         class_name = type(u).__name__
         if _dfs_function_pool.get(class_name) is None:
+            if not required:
+                return
             raise NotImplementedError('对于'+class_name+'类型节点的dfs函数尚未实现!')
         dfs_fn = _dfs_function_pool[class_name]
 
@@ -343,11 +359,6 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
         ele_type = dfs(u.type)
         return ArrayType(ele_type, dim)
 
-    @register('Assignment')
-    def assign(u):
-        dfs(u.rvalue)
-        dfs(u.lvalue)
-
     @register('DeclList') # 目前看来只有For用到
     def DeclList(u):
         symbols = []
@@ -377,77 +388,11 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
         dfs(u.cond)
         dfs(u.stmt)
 
-    @register('Return')
-    def Return(u):
-        dfs(u.expr)
-
-    @register('Label')
-    def Label(u:c_ast.Label):
-        dfs(u.stmt)
-
-    @register('Goto')
-    def goto(u):
-        pass
-
-    @register('UnaryOp')
-    def unaryOp(u: c_ast.UnaryOp):
-        dfs(u.expr)
-
-
-    @register('ID')
-    def id(u:c_ast.ID):
-        pass
-
-    @register('Constant')
-    def Constant(u):
-        pass
-
     @register('TernaryOp')
     def TernaryOp(u: c_ast.TernaryOp):
         dfs(u.cond)
         dfs(u.iftrue)
         dfs(u.iffalse)
-
-    @register('BinaryOp')
-    def BinaryOp(u: c_ast.BinaryOp):
-        dfs(u.left)
-        dfs(u.right)
-
-    @register('Cast')
-    def Cast(u:c_ast.Cast):
-        dfs(u.to_type)
-        dfs(u.expr)
-        
-    @register('Typename')
-    def Typename(u):
-        pass
-
-    @register('InitList')
-    def Cast(u:c_ast.InitList):
-        for expr in u.exprs:
-            dfs(expr)
-
-    @register('ArrayRef')
-    def Cast(u:c_ast.ArrayRef):
-        dfs(u.name)
-        dfs(u.subscript)
-
-    @register('StructRef')
-    def Cast(u:c_ast.StructRef):
-        dfs(u.name)
-        dfs(u.field)
-
-    @register('Break')
-    def Cast(u:c_ast.Break):
-        pass
-
-    @register('Continue')
-    def Cast(u:c_ast.Continue):
-        pass
-
-    @register('EmptyStatement')
-    def EmptyStatement(u:c_ast.EmptyStatement):
-        pass
 
     dfs(ast)
     return sts
