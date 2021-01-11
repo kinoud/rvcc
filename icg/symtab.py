@@ -240,7 +240,7 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
 
         type_name = type(u.type).__name__
         
-        if type_name != 'TypeDecl':
+        if type_name in ['FuncDecl','ArrayDecl','PtrDecl']:
             # FuncDecl ArrayDecl PtrDecl
             return {'symbol':dfs(u.type).gen_symbol(u.name)}
 
@@ -270,7 +270,6 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
         t = sts.get_symtab_of(u)
         if u.decls is None:
             return t.get_type(u.name) # u.name 是struct的名字(不含'struct')
-
         # 定义一个struct
         member_types = {}
         for d in u.decls:
