@@ -2,7 +2,7 @@ from pycparser import c_ast
 from pycparser import CParser
 import argparse
 
-from symbol import BasicType, PtrType, StructType, PtrSymbol, StructSymbol
+from symbol import BasicType, PtrType, StructType, BasicSymbol, PtrSymbol, StructSymbol
 from symtab import symtab_store
 from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
@@ -158,6 +158,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     def Decl(u:c_ast.Decl):
         block = Tblock()
         if u.init is not None:
+            # 目前只考虑了简单变量
             (rblock, rtmp, _) = dfs(u.init)
             u_sym = sts.get_symtab_of(u).get_symbol(u.name)
             newTAC = TAC("=", u_sym, rtmp)
@@ -225,27 +226,41 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         block = Tblock()
         name = u.name
         sym = sts.get_symtab_of(u).get_symbol(name)
+
+        if isinstance(sym, StructSymbol):
+            newTmp = current_symtab.gen_tmp_ptr_symbol(sym.type)
+            newTAC = TAC('&', newTmp, sym)
+            block.appendTAC(newTAC)
+            return (block, newTmp, 'pvar')
+
         return (block, sym, 'var')
 
     @register('StructRef')
     def StructRef(u):
         if u.type=='.':
-            (nameBlock, nameVal, _) = lval_to_rval(*dfs(u.name))
+            (nameBlock, nameVal, nameType) = dfs(u.name)
             #(fieldBlock, fieldVal, fieldType) = dfs(u.field)
+            
+            print((nameBlock, nameVal, nameType))
             '''
-            print((nameBlock, nameVal, _))
-
             print(nameVal)
             print(isinstance(nameVal, StructSymbol))
             print(nameVal.type)
             print(isinstance(nameVal.type, StructType))
             '''
-            
+            '''
             if not (isinstance(nameVal, StructSymbol) and isinstance(nameVal.type, StructType)):
                 print('Error: illeagal element before \'.\' ')     # .前面的应该只能是结构体变量吧
                 return (Tblock(), None, None)
 
             member_types = nameVal.type.member_types
+            '''
+            if not (nameType=='pvar' and isinstance(nameVal, PtrSymbol)):
+                if not isinstance(nameVal.type.target_type, StructType):
+                    print('Error: illeagal element before \'.\' ')     # .前面的应该只能是结构体变量吧
+                    return (Tblock(), None, None)
+            
+            member_types = nameVal.type.target_type.member_types
 
             if type(u.field).__name__!='ID':        # 访问结构体成员应该是只能用名字吧
                 print('Error: illeagal element after \'.\' ')
