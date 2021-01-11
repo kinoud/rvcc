@@ -2,7 +2,7 @@ from pycparser import c_ast
 from pycparser import CParser
 import argparse
 
-from symbol import BasicType, PtrType, StructType, ArrayType, BasicSymbol, PtrSymbol, StructSymbol, ArraySymbol
+from symbol import BasicType, PtrType, StructType, ArrayType, FuncType, BasicSymbol, PtrSymbol, StructSymbol, ArraySymbol
 from symtab import symtab_store
 from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
@@ -215,6 +215,15 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         # TODO
         return (block, None, None)
 
+    @register('ExprList')
+    def ExprList(u):
+        block = Tblock()
+        for expr in u.exprs:
+            (thisBlock, endv, endType) = dfs(expr)
+            block = Tblock(block, thisBlock)
+        
+        return (block, endv, endType)
+
     @register('Constant')
     def Constant(u):
         block = Tblock()
@@ -234,6 +243,37 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             return (block, newTmp, 'pvar')
 
         return (block, sym, 'var')
+    
+    @register('FuncCall')
+    def FuncCall(u):
+        (funcNameBlock, funcNameVal, funcNameType) = dfs(u.name)
+        argList = u.args.exprs # u.args是ExprList, 但是要用特殊办法展开
+        # print((funcNameBlock, funcNameVal, funcNameType))
+        paramList = []
+        argBlock = Tblock()
+        for arg in reversed(argList):
+            (thisBlock, thisEndv, _) = lval_to_rval(*dfs(arg))
+            argBlock = Tblock(argBlock, thisBlock)
+            paramList.append(thisEndv)
+        block = Tblock(funcNameBlock, argBlock)
+        for param in paramList:
+            newTAC = TAC('param', param)
+            block.appendTAC(newTAC)
+        
+        funcType = funcNameVal.type
+        if isinstance(funcType, FuncType):
+            retType = funcType.return_type
+            if isinstance(retType, BasicType):
+                newTmp = current_symtab.gen_tmp_basic_symbol(retType)
+                newTAC = TAC('call', newTmp, funcNameVal)
+                block.appendTAC(newTAC)
+                return (block, newTmp, 'tmp')
+            else:
+                print('Complex return value not supported now.')
+                return None
+        else: # 先不考虑函数指针等情况
+            return None
+        return None
 
     @register('ArrayRef')
     def ArrayRef(u):
@@ -534,6 +574,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     block, _, _ = dfs(ast)
     return block
+
 
 if __name__=='__main__':
     
