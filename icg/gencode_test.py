@@ -2,7 +2,7 @@ from pycparser import c_ast
 from pycparser import CParser
 import argparse
 
-from symbol import BasicType, PtrType, StructType, BasicSymbol, PtrSymbol, StructSymbol
+from symbol import BasicType, PtrType, StructType, ArrayType, BasicSymbol, PtrSymbol, StructSymbol, ArraySymbol
 from symtab import symtab_store
 from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
@@ -235,10 +235,30 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
         return (block, sym, 'var')
 
+    @register('ArrayRef')
+    def ArrayRef(u):
+        (nameBlock, nameVal, nameType) = lval_to_rval(*dfs(u.name))
+        (subsBlock, subsVal, subsType) = lval_to_rval(*dfs(u.subscript))
+
+        if isinstance(nameVal.type, ArrayType):
+            newType = PtrType(nameVal.type.ele_type)
+        elif isinstance(nameVal.type, PtrType):
+            newType = nameVal.type
+        else: # 应该是这样吧
+            print('Error: only pointer/array can be indexed.')
+            newType = None
+
+        if not isinstance(subsVal, BasicSymbol):
+            print('Error: subscript must be integer.')
+        
+        newTmp = current_symtab.gen_tmp_ptr_symbol(newType)
+        newTAC = TAC('+', newTmp, nameVal, subsVal)
+        block = Tblock(nameBlock, subsBlock)
+        block.appendTAC(newTAC)
+        return (block, newTmp, 'pvar')
+
     @register('StructRef')
     def StructRef(u):
-
-        
         (nameBlock, nameVal, nameType) = dfs(u.name)
         
         if u.type=='.':
@@ -466,7 +486,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         
         (init_block, _, _) = dfs(u.init)
         for_start = TAC('label', LabelSymbol())
-        cond_res,cond_block = dfs(u.cond)
+        (cond_block, cond_res, _) = dfs(u.cond)
         for_end = TAC('label', LabelSymbol())
         for_forward = TAC('ifz', GotoSymbol(for_end), cond_res)
         (body_block, _, _) = dfs(u.stmt)
