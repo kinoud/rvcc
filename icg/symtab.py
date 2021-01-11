@@ -95,7 +95,7 @@ class SymTab():
     # 暂时还没用到
     def gen_tmp_ptr_symbol(self, targetType):
         varName = "____"+str(len(self.tmps))
-        newTmp = PtrSymbol(varName, targetType)
+        newTmp = PtrSymbol(varName, PtrType(targetType))
         newTmp.isTmp = True
         self.tmps[varName] = newTmp
         return newTmp
