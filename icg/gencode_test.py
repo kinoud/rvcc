@@ -2,8 +2,8 @@ from pycparser import c_ast
 from pycparser import CParser
 import argparse
 
-from symbol import BasicType, PtrType, StructType, ArrayType, FuncType, BasicSymbol, PtrSymbol, StructSymbol, ArraySymbol
-from symtab import symtab_store
+from symbol import Symbol, BasicType, PtrType, StructType, ArrayType, FuncType, BasicSymbol, PtrSymbol, StructSymbol, ArraySymbol
+from symtab import symtab_store, SymTab
 from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
 from taccpx import LocalVarTable, simple_opt
@@ -109,12 +109,55 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             past_symtab = current_symtab
             current_symtab = sts.get_symtab_of(u)
             (block, endv, endtype) = dfs_fn(u)
+            
+            # rename begin
+            if class_name in ['For','Compound']:
+                config = rename_init(current_symtab)
+                rename_block_symbols(block, config)
+                rename_symbol(endv, config)
+            # rename end
+
             current_symtab = past_symtab
             # current_tvlist = past_tvlist
         else:
             (block, endv, endtype) = dfs_fn(u)
 
         return (block, endv, endtype)
+
+    _rename_block_id = 0
+    def rename_init(t:SymTab) -> dict:
+        nonlocal _rename_block_id
+        config = {}
+        config['sym_name'] = '_b%ds' %_rename_block_id
+        config['tmp_name'] = '_b%dt' %_rename_block_id
+        _rename_block_id += 1
+        config['sym_count'] = 0
+        config['tmp_count'] = 0
+        config['symtab'] = t
+        config['renamed_symbols'] = set()
+        return config
+
+    def rename_symbol(x:Symbol, config:dict):
+        if x is None or x in config['renamed_symbols']:
+            return
+        t = config['symtab']
+        if t.tmps.get(x.name) is not None:
+            name = config['tmp_name'] + str(config['tmp_count'])
+            config['tmp_count'] += 1
+        elif t.syms.get(x.name) is not None:
+            name = config['sym_name'] + str(config['sym_count'])
+            config['sym_count'] += 1
+        else:
+            name = None
+        if name is not None:
+            x.name = name
+            config['renamed_symbols'].add(x)
+
+    def rename_block_symbols(block:Tblock, config:dict):
+        for tac in block.TACs:
+            rename_symbol(tac.dest, config)
+            for x in tac.args:
+                rename_symbol(x, config)
 
     def lval_to_rval(block, res, resType):
         nonlocal current_symtab

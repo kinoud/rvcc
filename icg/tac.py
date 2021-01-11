@@ -15,7 +15,7 @@ class TAC(object):
     #    return self.arg1 == arg or self.arg2 == arg
 
     def isGoto(self):
-        return (self.op=='goto' or self.op=='if')
+        return (self.op=='goto' or self.op=='ifz')
 
     def __str__(self):
         line = str(self.id) + " : "
