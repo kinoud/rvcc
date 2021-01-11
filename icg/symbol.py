@@ -56,17 +56,21 @@ class BasicType(Type):
         return BasicSymbol(name, self)
 
 class FuncType(Type):
-    def __init__(self, return_type:Type, param_types:list):
+    def __init__(self, return_type:Type, param_types:list, param_names:list):
         super().__init__('function', 0)
         self.return_type = return_type
         if param_types is None:
             param_types = []
+        if param_names is None:
+            param_names = []
+        if len(param_types) > len(param_names):
+            param_names = []
+            for i in range(len(param_types)):
+                param_names.append('__param%d__'%i)
         self.param_types = param_types
+        self.param_names = param_names
     
     def gen_symbol(self, name):
-        param_names = []
-        for i in range(len(self.param_types)):
-            param_names.append('__param%d__'%i)
         return FuncSymbol(name, self)
 
 class PtrType(Type):
@@ -134,21 +138,14 @@ class FuncSymbol(Symbol):
     return_symbol: Symbol
     param_symbols: list
     '''
-    def __init__(self, name, func_type:FuncType, param_names:list):
+    def __init__(self, name, func_type:FuncType):
         super().__init__(name, func_type)
         self.return_symbol = func_type.return_type.gen_symbol('__ret__')
         param_symbols = []
-        
-        if param_names is None:
-            param_names = []
-        
-        assert len(func_type.param_types) == len(param_names)
 
-        for t,name in zip(func_type.param_types, param_names):
+        for t,name in zip(func_type.param_types, func_type.param_names):
             param_symbols.append(t.gen_symbol(name))
 
-        if param_symbols is None:
-            param_symbols = []
         self.param_symbols = param_symbols
 
     def __repr__(self):

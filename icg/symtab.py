@@ -222,16 +222,10 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
             dfs(u.init)
 
         type_name = type(u.type).__name__
-        if type_name == 'FuncDecl':
-            return {'symbol':dfs(u.type, name=u.name)} # return FuncSymbol
-
-        if type_name == 'PtrDecl':
-            ptr_type = dfs(u.type)
-            return {'symbol': ptr_type.gen_symbol(u.name)}
-
-        if type_name == 'ArrayDecl':
-            array_type = dfs(u.type)
-            return {'symbol':array_type.gen_symbol(u.name)}
+        
+        if type_name != 'TypeDecl':
+            # FuncDecl ArrayDecl PtrDecl
+            return {'symbol':dfs(u.type).gen_symbol(u.name)}
 
         t:Type = dfs(u.type) # u.type: Struct TypeDecl
 
@@ -279,11 +273,10 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
         return BasicType(type_str)
 
     @register('FuncDecl')
-    def func_decl(u:c_ast.FuncDecl, name:str):
+    def func_decl(u:c_ast.FuncDecl) -> FuncType:
         param_symbols = dfs(u.args) # to ParamList
         return_type = dfs(u.type) # to TypeDecl
-        func_type = FuncType(return_type, [p.type for p in param_symbols])
-        return FuncSymbol(name, func_type, [p.name for p in param_symbols])
+        return FuncType(return_type, [p.type for p in param_symbols], [p.name for p in param_symbols])
         
 
     @register('ParamList')
@@ -322,7 +315,7 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
         的符号,其size是返回值类型的size,offset是0.
         于是,我们约定在函数内部,返回值的offset为0.
         '''
-        x = dfs(u.decl)['symbol'] # FuncSymbol
+        x = dfs(u.decl)['symbol'] # u.decl: Decl
 
         for sym in x.param_symbols:
             t.add_symbol(sym)
