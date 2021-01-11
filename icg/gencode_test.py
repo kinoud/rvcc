@@ -237,57 +237,45 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
     @register('StructRef')
     def StructRef(u):
-        if u.type=='.':
-            (nameBlock, nameVal, nameType) = dfs(u.name)
-            #(fieldBlock, fieldVal, fieldType) = dfs(u.field)
-            
-            print((nameBlock, nameVal, nameType))
-            '''
-            print(nameVal)
-            print(isinstance(nameVal, StructSymbol))
-            print(nameVal.type)
-            print(isinstance(nameVal.type, StructType))
-            '''
-            '''
-            if not (isinstance(nameVal, StructSymbol) and isinstance(nameVal.type, StructType)):
-                print('Error: illeagal element before \'.\' ')     # .前面的应该只能是结构体变量吧
-                return (Tblock(), None, None)
 
-            member_types = nameVal.type.member_types
-            '''
+        
+        (nameBlock, nameVal, nameType) = dfs(u.name)
+        
+        if u.type=='.':
             if not (nameType=='pvar' and isinstance(nameVal, PtrSymbol)):
                 if not isinstance(nameVal.type.target_type, StructType):
                     print('Error: illeagal element before \'.\' ')     # .前面的应该只能是结构体变量吧
                     return (Tblock(), None, None)
-            
-            member_types = nameVal.type.target_type.member_types
-
-            if type(u.field).__name__!='ID':        # 访问结构体成员应该是只能用名字吧
-                print('Error: illeagal element after \'.\' ')
-                return (Tblock(), None, None)
-
-            field_type = member_types.get(u.field.name)
-            if field_type is None:
-                print('Error: this struct not has this member. ')
-                return (Tblock(), None, None)
-
-            endvType = PtrType(field_type)
-            newTmp = current_symtab.gen_tmp_basic_symbol(endvType)
-            newTAC = TAC('offset', newTmp, nameVal, FakeSymbol(u.field.name))
-            block = Tblock(nameBlock)
-            block.appendTAC(newTAC)
-
-            print(block)
-            print(newTmp)
-
-            return (block, newTmp, 'pvar')
-
         elif u.type=='->':
-            pass # 先不考虑
+            if not (nameType=='var' and isinstance(nameVal, PtrSymbol)):
+                if not isinstance(nameVal.type.target_type, StructType):
+                    print('Error: illeagal element before \'.\' ')     # .前面的应该只能是结构体变量吧
+                    return (Tblock(), None, None)
         else:
             # 应该不会有其他情况吧
             return None
-        return (Tblock(), None, None)
+
+        member_types = nameVal.type.target_type.member_types
+
+        if type(u.field).__name__!='ID':        # 访问结构体成员应该是只能用名字吧
+            print('Error: illeagal element after \'.\' ')
+            return (Tblock(), None, None)
+
+        field_type = member_types.get(u.field.name)
+        if field_type is None:
+            print('Error: this struct not has this member. ')
+            return (Tblock(), None, None)
+
+        endvType = PtrType(field_type)
+        newTmp = current_symtab.gen_tmp_basic_symbol(endvType)
+        newTAC = TAC('offset', newTmp, nameVal, FakeSymbol(u.field.name))
+        block = Tblock(nameBlock)
+        block.appendTAC(newTAC)
+
+        print(block)
+        print(newTmp)
+
+        return (block, newTmp, 'pvar')
 
     @register('Assignment')
     def Assignment(u:c_ast.Assignment):
