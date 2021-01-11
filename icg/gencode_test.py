@@ -124,8 +124,8 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             if isinstance(targetType, BasicType):
                 newTmp = current_symtab.gen_tmp_basic_symbol(targetType)
             elif isinstance(targetType, PtrType): # 目前似乎还用不到
-                newtgt = targetType.target_type
-                newTmp = current_symtab.gen_tmp_ptr_symbol(newtgt)
+                # newtgt = targetType.target_type
+                newTmp = current_symtab.gen_tmp_ptr_symbol(targetType)
             elif isinstance(targetType, StructType):
                 newTmp = current_symtab.gen_tmp_struct_symbol(targetType)
             else: # TODO
@@ -137,6 +137,27 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             res = newTmp
             resType = 'var'
         return (block, res, resType)
+
+    def struct_copy(struct_ptr):
+
+        member_types = struct_ptr.type.target_type.member_types
+
+        print(member_types)
+
+        for vName, vType in member_types.items():
+            ptrType = PtrType(vType)
+            # newTmp = current_symtab.gen_tmp_basic_symbol(
+
+        '''
+        endvType = PtrType(field_type)
+        newTmp = current_symtab.gen_tmp_basic_symbol(endvType)
+        newTAC = TAC('offset', newTmp, nameVal, FakeSymbol(u.field.name))
+        block = Tblock(nameBlock)
+        block.appendTAC(newTAC)
+        '''
+
+
+        return (None, Tblock())
 
     @register('FileAST')
     def FileAST(u):
@@ -237,7 +258,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         sym = sts.get_symtab_of(u).get_symbol(name)
 
         if isinstance(sym, StructSymbol):
-            newTmp = current_symtab.gen_tmp_ptr_symbol(sym.type)
+            newTmp = current_symtab.gen_tmp_ptr_symbol(PtrType(sym.type))
             newTAC = TAC('&', newTmp, sym)
             block.appendTAC(newTAC)
             return (block, newTmp, 'pvar')
@@ -246,15 +267,35 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     
     @register('FuncCall')
     def FuncCall(u):
+        '''
+        调用约定：从后往前显式指出每个参数
+        basic类型和ptr类型变量直接使用
+        struct类型变量原地拷贝，然后传指针
+        '''
         (funcNameBlock, funcNameVal, funcNameType) = dfs(u.name)
         argList = u.args.exprs # u.args是ExprList, 但是要用特殊办法展开
         # print((funcNameBlock, funcNameVal, funcNameType))
         paramList = []
         argBlock = Tblock()
         for arg in reversed(argList):
-            (thisBlock, thisEndv, _) = lval_to_rval(*dfs(arg))
-            argBlock = Tblock(argBlock, thisBlock)
-            paramList.append(thisEndv)
+            (thisBlock, thisEndv, thisType) = dfs(arg)
+            if thisType!='pvar':
+                argBlock = Tblock(argBlock, thisBlock)
+                paramList.append(thisEndv)
+            else:
+                assert(isinstance(thisEndv, PtrSymbol))
+                if isinstance(thisEndv.type.target_type, BasicType):
+                    (thisBlock, thisEndv, _) = lval_to_rval(thisBlock, thisEndv, thisType)
+                    argBlock = Tblock(argBlock, thisBlock)
+                    paramList.append(thisEndv)
+                elif isinstance(thisEndv.type.target_type, StructType):
+                    # (thisEndv, copyBlock) = struct_copy(thisEndv)
+                    thisBlock = Tblock(thisBlock)#, copyBlock)
+                    argBlock = Tblock(argBlock, thisBlock)
+                    paramList.append(thisEndv)
+                else:
+                    return None
+
         block = Tblock(funcNameBlock, argBlock)
         for param in paramList:
             newTAC = TAC('param', param)
@@ -291,7 +332,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         if not isinstance(subsVal, BasicSymbol):
             print('Error: subscript must be integer.')
         
-        newTmp = current_symtab.gen_tmp_ptr_symbol(newType)
+        newTmp = current_symtab.gen_tmp_ptr_symbol(PtrType(newType))
         newTAC = TAC('+', newTmp, nameVal, subsVal)
         block = Tblock(nameBlock, subsBlock)
         block.appendTAC(newTAC)
@@ -327,13 +368,14 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             return (Tblock(), None, None)
 
         endvType = PtrType(field_type)
-        newTmp = current_symtab.gen_tmp_basic_symbol(endvType)
+        newTmp = current_symtab.gen_tmp_ptr_symbol(endvType)
+
+        print(newTmp)
+        print(isinstance(newTmp, PtrSymbol))
+
         newTAC = TAC('offset', newTmp, nameVal, FakeSymbol(u.field.name))
         block = Tblock(nameBlock)
         block.appendTAC(newTAC)
-
-        print(block)
-        print(newTmp)
 
         return (block, newTmp, 'pvar')
 
