@@ -2,7 +2,7 @@ from pycparser import c_ast
 from pycparser import CParser
 
 from symbol import *
-from symbol import FuncSymbol
+from symbol import ArrayType
 import argparse
 
 class SymTab():
@@ -230,15 +230,8 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
             return {'symbol': ptr_type.gen_symbol(u.name)}
 
         if type_name == 'ArrayDecl':
-            res = dfs(u.type)
-            size = res['size']
-            dims = res['dims']
-            total = res['total']
-            type_str = res['type']
-            x = ArraySymbol(u.name, type_str, dims, 
-                size=size*total, offset=offset, offset_type=get_offset_type())
-            offset += x.size
-            return {'symbol':x}
+            array_type = dfs(u.type)
+            return {'symbol':array_type.gen_symbol(u.name)}
 
         t:Type = dfs(u.type) # u.type: Struct TypeDecl
 
@@ -352,27 +345,10 @@ def symtab_store(ast:c_ast.Node) -> SymTabStore:
         return PtrType(target_type)
         
     @register('ArrayDecl')
-    def array_decl(u:c_ast.ArrayDecl):
-        '''
-        返回
-        size: 基本元素的size
-        type: 基本元素的type(str)
-        total: 基本元素的总个数
-        dim: 本维度大小
-        '''
+    def array_decl(u:c_ast.ArrayDecl) -> ArrayType:
         dim = int(u.dim.value) # u.dim:Constant
-        res = dfs(u.type)
-        size = res['size']
-        type_str = res['type']
-        if isinstance(u.type, c_ast.ArrayDecl):
-            total = dim * res['total']
-            dims = [dim] + res['dims']
-        else:
-            total = dim
-            dims = [dim]
-        
-        return {'size':size,'type':type_str,'dims':dims,'total':total}
-
+        ele_type = dfs(u.type)
+        return ArrayType(ele_type, dim)
 
     @register('Assignment')
     def assign(u):

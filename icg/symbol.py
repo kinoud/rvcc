@@ -49,7 +49,7 @@ class BasicType(Type):
     def __init__(self, type_str:str):
         szof = BasicType.SIZE_OF
         if szof.get(type_str) is None:
-            raise NotImplementedError('类型"'+a+'"尚不支持')
+            raise NotImplementedError('类型"'+type_str+'"尚不支持')
         super().__init__(type_str, szof[type_str])
     
     def gen_symbol(self, name):
@@ -85,6 +85,21 @@ class PtrType(Type):
     def __repr__(self):
         ans = super().__repr__()
         ans = ans[:-1] + ',target=' + repr(self.target_type) + ')'
+        return ans
+
+
+class ArrayType(Type):
+    def __init__(self, ele_type:Type, dim:int):
+        super().__init__('array', dim*ele_type.size)
+        self.ele_type = ele_type
+        self.dim = dim
+    
+    def gen_symbol(self, name):
+        return ArraySymbol(name, self)
+
+    def __repr__(self):
+        ans = super().__repr__()
+        ans = ans[:-1] + ',dim=' + str(self.dim) + ',ele=' + repr(self.ele_type) + ')'
         return ans
 
 # Type end
@@ -143,4 +158,9 @@ class FuncSymbol(Symbol):
             params += syb.name+','
         ans += ',params=['+params[:-1]+'],rtype='+repr(self.return_symbol.type)
         return ans
+
+class ArraySymbol(Symbol):
+    def __init__(self, name, array_type:ArrayType):
+        super().__init__(name, array_type)
+
 # Symbol end
