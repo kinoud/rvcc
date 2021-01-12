@@ -74,7 +74,7 @@ def genType(op, *args)->BasicType:
     ptrType = None
     for arg in args:
         if isinstance(arg.type, PtrType):
-            if isPtr and not (op=='-' and len(args)==2 and ptrType == arg.type):
+            if isPtr and not (op=='-'): # and len(args)==2 and ptrType == arg.type):
                 print('Error: invaild pointer operate.')
                 return None
             else:

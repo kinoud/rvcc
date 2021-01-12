@@ -1,5 +1,5 @@
 from tac import TAC, TAC_block as Tblock
-from symbol import PtrType, ArrayType
+from symbol import BasicType, PtrType, ArrayType
 from symconst import genSimpleConst, genType, genConstant
 
 from collections import deque
@@ -115,6 +115,9 @@ def func_handler(block):
 
     block = sym_address_handler(block)
 
+    print('FUNC(mid)')
+    print(block)
+
     return block
 
 '''
@@ -132,14 +135,14 @@ def sym_address_handler(block):
 
     
     src_tac_deque = deque(block.TACs)
-    while len(src_tac_deque)>0:
+    while len(src_tac_deque)>0:         #  special: 至少在这一遍不对乘除法语句作处理（考虑到指针的offset）
         tac = src_tac_deque.popleft()
         # print(dump_tac_detail(tac))
         if tac.op=='=': # 单赋值语句，分析类型转换
-            newBlock = Tblock(newBlock, assign_cast_handler(tac))
+            newBlock.appendTAC(*assign_cast_handler(tac))
         elif tac.op=='+':
             if (len(tac.args)==1):      # +单目，我们切换成=符号
-                newBlock.appendTAC(assign_cast_handler(TAC('=', tac.dest, *tac.args)))
+                newBlock.appendTAC(*assign_cast_handler(TAC('=', tac.dest, *tac.args)))
             else:                       # 区分add和addi
                 assert(not (tac.args[0].isConst and tac.args[1].isConst))
                 new_tac = TAC('+', tac.dest, *tac.args)
@@ -147,7 +150,7 @@ def sym_address_handler(block):
                     new_tac.args = (new_tac.args[1], new_tac.args[0])
                 if new_tac.args[1].isConst:
                     new_tac.op = '+i'
-                newBlock = Tblock(newBlock, add_cast_handler(new_tac))
+                newBlock.appendTAC(*add_cast_handler(new_tac))
         elif tac.op=='-':
             if (len(tac.args)==1):      # -单目
                 newBlock.appendTAC(tac)
@@ -155,7 +158,7 @@ def sym_address_handler(block):
                 assert(not (tac.args[0].isConst and tac.args[1].isConst))
                 if tac.args[0].isConst:    #   暂未考虑不等宽情形 
                     tac_1 = TAC('-', tac.args[1], tac.args[1])
-                    tac_2 = TAC('+i', tac.dest, tac.args[1], tac.args[0])
+                    tac_2 = TAC('+', tac.dest, tac.args[1], tac.args[0])   # 还要塞回去
                     tac_3 = TAC('-', tac.args[1], tac.args[1])
                     newBlock.appendTAC(tac_1)
                     src_tac_deque.appendleft(tac_3)
@@ -165,8 +168,28 @@ def sym_address_handler(block):
                     add_tac = TAC('+i', tac.dest, tac.args[0], neg_const)
                     src_tac_deque.appendleft(add_tac)
                 else:
-                    #TODO
-                    newBlock.appendTAC(tac)
+                    newBlock.appendTAC(*sub_cast_handler(tac))
+        elif tac.op=='<':               # <u 为无符号比较，  其他比较都转化为小于比较
+            assert(len(tac.args)==2)
+            if (not tac.args[0].type.name.startswith('unsigned')) and (not tac.args[1].type.name.startswith('unsigned')):
+                newBlock.appendTAC(TAC('<', tac.dest, *tac.args))
+            else:              #  指针比较也是无符号的
+                newBlock.appendTAC(TAC('<u', tac.dest, *tac.args))
+        elif tac.op=='>':
+            assert(len(tac.args)==2)
+            new_tac = TAC('<', tac.dest, tac.args[1], tac.args[0])
+            src_tac_deque.appendleft(new_tac)
+        elif tac.op=='>=':
+            tac_1 = TAC('<', tac.dest, *tac.args)
+            tac_2 = TAC('==', tac.dest, tac.dest, genSimpleConst('0', BasicType('int')))
+            src_tac_deque.extendleft([tac_2, tac_1])
+        elif tac.op=='<=':
+            tac_1 = TAC('>', tac.dest, *tac.args)
+            tac_2 = TAC('==', tac.dest, tac.dest, genSimpleConst('0', BasicType('int')))
+            src_tac_deque.extendleft([tac_2, tac_1])
+        elif tac.op=='!':
+            new_tac = TAC('==', tac.dest, tac.dest genSimpleConst('0', BasicType('int')))
+            src_tac_deque.appendleft(new_tac)
         else: #default
             newBlock.appendTAC(tac)
     return newBlock
@@ -184,12 +207,11 @@ def assign_cast_handler(tac):  # 似乎不需要有操作
         print(src)
         return tac
     '''
-    return Tblock.gen_tac_block(tac)
+    return (tac,)
 
 def add_cast_handler(tac):
     # tac 的操作符和参数位置都已修正
-    print(dump_tac_detail(tac))
-
+    #print(dump_tac_detail(tac))
     # destType = tac.dest.type
     (arg1, arg2) = tac.args
 
@@ -211,12 +233,28 @@ def add_cast_handler(tac):
             new_val = arg2.val * tgt_size
             new_arg2 = genSimpleConst(str(new_val), arg2.type)
             new_tac = TAC(tac.op, tac.dest, arg1, new_arg2)
-            return Tblock.gen_tac_block(new_tac)
+            return (new_tac,)
         else:
             tac_a = TAC('*', arg2, arg2, genSimpleConst(str(tgt_size), arg2.type))
             tac_b = TAC('/', arg2, arg2, genSimpleConst(str(tgt_size), arg2.type))
-            block = Tblock()
-            block.appendTAC(tac_a, tac, tac_b)
-            return block
+            return (tac_a, tac, tac_b)
 
-    return Tblock.gen_tac_block(tac)
+    return Tblock.gen_tac_block(tac).TACs
+
+def sub_cast_handler(tac):
+    (arg1, arg2) = tac.args
+
+    # 暂时忽略大小适配的变化，只考虑指针
+    if isinstance(arg1.type, PtrType):
+        # BasicType( int )的场合看作offset，否则直接把arg2强制转化为arg1类型指针
+        tgt_size = arg1.type.target_type.size
+        if isinstance(arg2.type, BasicType):
+            tac_a = TAC('*', arg2, arg2, genSimpleConst(str(tgt_size), arg2.type))
+            tac_b = TAC('/', arg2, arg2, genSimpleConst(str(tgt_size), arg2.type))
+            return (tac_a, tac, tac_b)
+        else:
+            dest = tac.dest
+            next_tac = TAC('/', dest, dest, genSimpleConst(str(tgt_size), BasicType('int')))
+            return (tac, next_tac)
+
+    return (tac,)
