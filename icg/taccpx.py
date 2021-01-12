@@ -1,4 +1,4 @@
-from tac import TAC, TAC_block
+from tac import TAC, TAC_block as Tblock
 from symconst import genSimpleConst, genType, genConstant
 
 class LocalVarTable(object):
@@ -54,7 +54,7 @@ class LocalVarTable(object):
         return str(self)
 
 def simple_opt(tblock, ltable):
-    new_block = TAC_block()
+    new_block = Tblock()
 
     for src_tac in tblock.TACs:
         if len(new_block.TACs)==0:
@@ -94,7 +94,7 @@ def simple_opt(tblock, ltable):
             new_block.appendTAC(TAC(None, None))
         else:
             new_block.appendTAC(cur_tac)
-    res_block = TAC_block()
+    res_block = Tblock()
     for tac in new_block.TACs:
         if not(tac.op is None):
             res_block.appendTAC(tac)
@@ -102,4 +102,20 @@ def simple_opt(tblock, ltable):
     '''
 
 def func_handler(block):
+    print('FUNC(before)')
+    print(block)
+
+    block = sym_address_handler(block)
+
     return block
+
+def sym_address_handler(block):
+    newBlock = Tblock()
+    for tac in block.TACs:
+        print(tac.op + ' ' + str(tac.dest) + ' ' + str(tac.args))
+        if tac.op=='=': # 单赋值语句，分析类型转换
+            #基本上都是直接过去了？
+            newBlock.appendTAC(tac)
+        else: #default
+            newBlock.appendTAC(tac)
+    return newBlock

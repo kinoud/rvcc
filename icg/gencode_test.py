@@ -246,9 +246,6 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         funcRetMgr.exitFunc()
 
         # 接下来对这个整体的FuncDef的TAC作地址化
-        print(sts.get_symtab_of(u))
-        print(block)
-        lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
         block = func_handler(block)
 
         return (block, None, None)
@@ -558,6 +555,30 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             elif resType!='var':
                 print('Not lvalue!')
                 return (block, None, None)
+        elif u.op=='++' or u.op=='p++' or u.op=='--' or u.op=='p--':
+            if resType!='var':
+                print('Not lvalue!')
+                return (block, None, None)
+            if isinstance(res.type, BasicType):
+                newTmp = current_symtab.gen_tmp_basic_symbol(res.type)
+            elif isinstance(res.type, PtrType):
+                newTmp = current_symtab.gen_tmp_ptr_symbol(res.type)
+            else:
+                print('Error: this type of symbol cannot apply ++/--.')
+                return (block, None, None)
+            newOp = ''+u.op[1]
+            if u.op[0]=='p':
+                tac_1 = TAC('=', newTmp, res)
+                tac_2 = TAC(newOp, res, res, genSimpleConst('1', res.type))
+                block.appendTAC(tac_1)
+                block.appendTAC(tac_2)
+                return (block, newTmp, 'tmp')
+            else:             # C标准中即使前置++/--返回的也是右值
+                tac_1 = TAC(newOp, res, res, genSimpleConst('1', res.type))
+                tac_2 = TAC('=', newTmp, res)
+                block.appendTAC(tac_1)
+                block.appendTAC(tac_2)
+                return (block, newTmp, 'tmp')
         else:
             (block, res, resType) = lval_to_rval(block, res, resType)
             
