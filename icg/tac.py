@@ -43,8 +43,15 @@ class TAC_block(object):
         for block in combined_blocks:
             self.TACs += block.TACs
 
-    def appendTAC(self, newTAC):
-        self.TACs.append(newTAC)
+    @staticmethod
+    def gen_tac_block(tac):
+        block = TAC_block()
+        block.appendTAC(tac)
+        return block
+
+    def appendTAC(self, *newTACs):
+        for tac in newTACs:
+            self.TACs.append(tac)
 
     def __str__(self):
         if len(self.TACs)==0:

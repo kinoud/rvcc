@@ -1,5 +1,8 @@
 from tac import TAC, TAC_block as Tblock
+from symbol import PtrType, ArrayType
 from symconst import genSimpleConst, genType, genConstant
+
+from collections import deque
 
 class LocalVarTable(object):
     '''
@@ -54,9 +57,14 @@ class LocalVarTable(object):
         return str(self)
 
 def simple_opt(tblock, ltable):
+
+    print(tblock)
+
     new_block = Tblock()
 
-    for src_tac in tblock.TACs:
+    src_tac_deque = deque(tblock.TACs)
+    while len(src_tac_deque)>0:
+        src_tac = src_tac_deque.popleft()
         if len(new_block.TACs)==0:
             new_block.appendTAC(src_tac)
         else:
@@ -109,13 +117,106 @@ def func_handler(block):
 
     return block
 
+'''
+    现状：由于我们全用int类型，因此几乎没什么要转化的，但是这点以后可能变更
+'''
+
+def dump_tac_detail(tac):
+    line = tac.op + ' ' + str(tac.dest)
+    for arg in tac.args:
+        line += ' ' + str(arg)
+    return line
+
 def sym_address_handler(block):
     newBlock = Tblock()
-    for tac in block.TACs:
-        print(tac.op + ' ' + str(tac.dest) + ' ' + str(tac.args))
+
+    
+    src_tac_deque = deque(block.TACs)
+    while len(src_tac_deque)>0:
+        tac = src_tac_deque.popleft()
+        # print(dump_tac_detail(tac))
         if tac.op=='=': # 单赋值语句，分析类型转换
-            #基本上都是直接过去了？
-            newBlock.appendTAC(tac)
+            newBlock = Tblock(newBlock, assign_cast_handler(tac))
+        elif tac.op=='+':
+            if (len(tac.args)==1):      # +单目，我们切换成=符号
+                newBlock.appendTAC(assign_cast_handler(TAC('=', tac.dest, *tac.args)))
+            else:                       # 区分add和addi
+                assert(not (tac.args[0].isConst and tac.args[1].isConst))
+                new_tac = TAC('+', tac.dest, *tac.args)
+                if new_tac.args[0].isConst:
+                    new_tac.args = (new_tac.args[1], new_tac.args[0])
+                if new_tac.args[1].isConst:
+                    new_tac.op = '+i'
+                newBlock = Tblock(newBlock, add_cast_handler(new_tac))
+        elif tac.op=='-':
+            if (len(tac.args)==1):      # -单目
+                newBlock.appendTAC(tac)
+            else:                       # 只有sub
+                assert(not (tac.args[0].isConst and tac.args[1].isConst))
+                if tac.args[0].isConst:    #   暂未考虑不等宽情形 
+                    tac_1 = TAC('-', tac.args[1], tac.args[1])
+                    tac_2 = TAC('+i', tac.dest, tac.args[1], tac.args[0])
+                    tac_3 = TAC('-', tac.args[1], tac.args[1])
+                    newBlock.appendTAC(tac_1)
+                    src_tac_deque.appendleft(tac_3)
+                    src_tac_deque.appendleft(tac_2)
+                elif tac.args[1].isConst:
+                    neg_const = genSimpleConst(str(-tac.args[1].val), tac.args[1].type)
+                    add_tac = TAC('+i', tac.dest, tac.args[0], neg_const)
+                    src_tac_deque.appendleft(add_tac)
+                else:
+                    #TODO
+                    newBlock.appendTAC(tac)
         else: #default
             newBlock.appendTAC(tac)
     return newBlock
+
+def assign_cast_handler(tac):  # 似乎不需要有操作
+    # print(dump_tac_detail(tac))
+    '''
+    dest = tac.dest
+    src = tac.args[0]
+    if isinstance(dest.type, PtrType) and isinstance(src.type, PtrType): # 指针间直接赋值
+        return tac
+    elif isinstance(dest.type, PtrType) and isinstance(src.type, ArrayType): # 数组降级
+        return tac
+    elif isinstance(dest.type, PtrType) and src.isConst:       # 指针+常数
+        print(src)
+        return tac
+    '''
+    return Tblock.gen_tac_block(tac)
+
+def add_cast_handler(tac):
+    # tac 的操作符和参数位置都已修正
+    print(dump_tac_detail(tac))
+
+    # destType = tac.dest.type
+    (arg1, arg2) = tac.args
+
+    # 暂时忽略大小适配的变化，只考虑指针
+    if isinstance(arg2.type, PtrType) or isinstance(arg2.type, ArrayType):
+        arg1, arg2 = arg2, arg1
+    
+    targetType = None
+    if isinstance(arg1.type, PtrType):
+        targetType = arg1.type.target_type    
+    elif isinstance(arg1.type, ArrayType):
+        targetType = arg1.type.ele_type
+
+    if not (targetType is None):
+        tgt_size = targetType.size
+        print(tgt_size)
+        print(arg2)
+        if arg2.isConst:
+            new_val = arg2.val * tgt_size
+            new_arg2 = genSimpleConst(str(new_val), arg2.type)
+            new_tac = TAC(tac.op, tac.dest, arg1, new_arg2)
+            return Tblock.gen_tac_block(new_tac)
+        else:
+            tac_a = TAC('*', arg2, arg2, genSimpleConst(str(tgt_size), arg2.type))
+            tac_b = TAC('/', arg2, arg2, genSimpleConst(str(tgt_size), arg2.type))
+            block = Tblock()
+            block.appendTAC(tac_a, tac, tac_b)
+            return block
+
+    return Tblock.gen_tac_block(tac)

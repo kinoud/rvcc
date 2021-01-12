@@ -300,7 +300,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             (newBlock, _, _) = dfs(node)
             block = Tblock(block, newBlock)
         # TODO
-        lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
+        # lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
         # block = simple_opt(block, lt)
         # TODO
         return (block, None, None)
