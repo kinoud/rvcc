@@ -92,6 +92,13 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             _dfs_function_pool[class_name] = f
         return _register
 
+    renamed_symbols = {}
+    def add_renamed_symbol(x:Symbol):
+        renamed_symbols[x.name] = x
+    def show_renamed_symbols():
+        for v in renamed_symbols.values():
+            print('['+repr(v)+']')
+
     def dfs(u:c_ast.Node):
         if u is None:                       # deliver empty node
             return (Tblock(), None, None)
@@ -116,6 +123,10 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
                 config = rename_init(current_symtab)
                 rename_block_symbols(block, config)
                 rename_symbol(endv, config)
+            else:
+                for x in current_symtab:
+                    add_renamed_symbol(x) # 全局变量和函数, 不需要重命名, 但仍然加进来
+                show_renamed_symbols()
             
             # rename end
 
@@ -125,7 +136,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             res = dfs_fn(u)
 
         return res
-
+    
     _rename_block_id = 0
     def rename_init(t:SymTab) -> dict:
         nonlocal _rename_block_id
@@ -151,6 +162,8 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             x.name = config['prefix'] + x.name
             d[x.name] = x
             config['renamed'].add(x)
+            add_renamed_symbol(x)
+
 
     def rename_block_symbols(block:Tblock, config:dict):
         for tac in block.TACs:
