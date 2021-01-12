@@ -169,11 +169,10 @@ def sym_address_handler(block):
             else:                       # 只有sub
                 assert(not (tac.args[0].isConst and tac.args[1].isConst))
                 if tac.args[0].isConst:    #   暂未考虑不等宽情形 
-                    tac_1 = TAC('-', tac.args[1], tac.args[1])
-                    tac_2 = TAC('+', tac.dest, tac.args[1], tac.args[0])   # 还要塞回去
-                    tac_3 = TAC('-', tac.args[1], tac.args[1])
+                    tmp = stab.get_tmp()
+                    tac_1 = TAC('-', tmp, tac.args[1])
+                    tac_2 = TAC('+', tac.dest, tmp, tac.args[0])   # 还要塞回去
                     newBlock.appendTAC(tac_1)
-                    src_tac_deque.appendleft(tac_3)
                     src_tac_deque.appendleft(tac_2)
                 elif tac.args[1].isConst:
                     neg_const = genSimpleConst(str(-tac.args[1].val), tac.args[1].type)
