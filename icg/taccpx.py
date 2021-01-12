@@ -55,6 +55,19 @@ class LocalVarTable(object):
 
 def simple_opt(tblock, ltable):
     new_block = TAC_block()
+
+    for src_tac in tblock.TACs:
+        if len(new_block.TACs)==0:
+            new_block.appendTAC(src_tac)
+        else:
+            last_tac = new_block.TACs[-1]
+            if src_tac.op=='=' and last_tac.dest.name==src_tac.args[0].name and (last_tac.dest in ltable.tmps):
+                last_tac.dest = src_tac.dest
+            else:
+                new_block.appendTAC(src_tac)
+    return new_block
+
+    '''
     src_tacs = tblock.TACs
     length = len(src_tacs)
     for i in range(0,length):
@@ -86,4 +99,7 @@ def simple_opt(tblock, ltable):
         if not(tac.op is None):
             res_block.appendTAC(tac)
     return res_block
-                
+    '''
+
+def func_handler(block):
+    return block

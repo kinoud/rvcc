@@ -6,7 +6,7 @@ from symbol import Type, Symbol, BasicType, PtrType, StructType, ArrayType, Func
 from symtab import symtab_store, SymTab
 from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
-from taccpx import LocalVarTable, simple_opt
+from taccpx import LocalVarTable, simple_opt, func_handler
 
 class LoopOpSet:
     def __init__(self):
@@ -228,20 +228,6 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
         return (block, None, None)
 
-    @register('Decl')
-    def Decl(u:c_ast.Decl):
-        block = Tblock()
-        if u.init is not None:
-            # 目前只考虑了简单变量
-            (rblock, rtmp, _) = dfs(u.init)
-            u_sym = sts.get_symtab_of(u).get_symbol(u.name)
-            newTAC = TAC("=", u_sym, rtmp)
-            block = Tblock(block, rblock)
-            block.appendTAC(newTAC)
-
-        # print(block)
-        return (block, None, None)
-
     @register('FuncDef')
     def FuncDef(u):
         retVar = sts.get_symtab_of(u).get_symbol('__ret__')
@@ -259,6 +245,26 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             tac.dest = GotoSymbol(func_end)
         funcRetMgr.exitFunc()
 
+        # 接下来对这个整体的FuncDef的TAC作地址化
+        print(sts.get_symtab_of(u))
+        print(block)
+        lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
+        block = func_handler(block)
+
+        return (block, None, None)
+
+    @register('Decl')
+    def Decl(u:c_ast.Decl):
+        block = Tblock()
+        if u.init is not None:
+            # 目前只考虑了简单变量
+            (rblock, rtmp, _) = dfs(u.init)
+            u_sym = sts.get_symtab_of(u).get_symbol(u.name)
+            newTAC = TAC("=", u_sym, rtmp)
+            block = Tblock(block, rblock)
+            block.appendTAC(newTAC)
+
+        # print(block)
         return (block, None, None)
 
     @register('Return')
@@ -321,16 +327,22 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             newTAC = TAC('=', newTmp, sym)
             block.appendTAC(newTAC)
             return (block, newTmp, 'var')
+        elif sym is None:
+            print('Error: Id name not found here.')
 
         return (block, sym, 'var')
     
     @register('Cast')
     def Cast(u):
         to_type = dfs(u.to_type)
-        print(to_type,'!!!!!!!!!!!')
-        print(u.to_type)
-        print(u.expr)
+        (exprBlock, exprVal, _) = lval_to_rval(*dfs(u.expr))
+        newTmp = current_symtab.gen_tmp_ptr_symbol(to_type)
+        newTAC = TAC('=', newTmp, exprVal)
+        block = Tblock(exprBlock)
+        block.appendTAC(newTAC)
+        return (block, newTmp, 'tmp')
     
+    #BEGIN ----以下都是给cast用的，decl不会深入进来
     @register('Typename')
     def Typename(u) -> Type:
         return dfs(u.type)
@@ -369,6 +381,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         # 暂时认为identifier_type都是BasicType
         type_str = ' '.join(u.names)
         return BasicType(type_str)
+    # END
 
     @register('FuncCall')
     def FuncCall(u):
@@ -410,8 +423,9 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
                     thisBlock = Tblock(thisBlock, copyBlock)
                     argBlock = Tblock(argBlock, thisBlock)
                     paramList.append(thisEndv)
-                else:
-                    return None
+                else: # 暂时没想到其他允许的参数形式
+                    print("Error: Illegal param.")
+                    return (Tblock(), None, None)
 
         block = Tblock(funcNameBlock, argBlock)
 
@@ -428,11 +442,12 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
                 block.appendTAC(newTAC)
                 return (block, newTmp, 'tmp')
             else:
-                print('Complex return value not supported now.')
-                return None
+                print('Error: Complex return value not supported now.')
+                return (Tblock(), None, None)
         else: # 先不考虑函数指针等情况
-            return None
-        return None
+            print('Error: Not supported now.')
+            return (Tblock(), None, None)
+        return (Tblock(), None, None)
 
     @register('ArrayRef')
     def ArrayRef(u):
@@ -487,7 +502,8 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
                     return (Tblock(), None, None)
         else:
             # 应该不会有其他情况吧
-            return None
+            print('Error: quirk struct ref?')
+            return (Tblock(), None, None)
 
         member_types = nameVal.type.target_type.member_types
 
@@ -528,9 +544,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
         block = Tblock(lblock, rblock)
         block.appendTAC(newTAC)
-            
-        # TODO
-        #block = left_val_handler(block)
+        
         return (block, lval, ltype)
 
     @register('UnaryOp')
@@ -559,12 +573,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             newTAC = TAC(u.op, newTmp, res)
             block.appendTAC(newTAC)
             endv = newTmp
-        '''  废弃
-        if u.op=='&':
-            # lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
-            # TODO
-            block = left_val_handler(block)
-        '''
+        
         return (block, endv, 'tmp')
 
     @register('BinaryOp')

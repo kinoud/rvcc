@@ -56,6 +56,17 @@ class TAC_block(object):
     def __repr__(self):
         return str(self)
 
+'''
+class TAC_tuple(object):
+    def __init__(self, block, endv = None, state = 'lval'):
+        self.block = block
+        self.endv = endv
+        self.state = state  # 1. var  : 变量
+                            # 2. pvar  : 待决的指针目标
+                            # 3. tmp  : 不能作左值的临时量
+                            # 4. const: 常量
+'''
+
 if __name__=='__main__':
 
     t1 = TAC("+", "x", "y", "z")
