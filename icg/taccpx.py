@@ -1,5 +1,5 @@
 from tac import TAC, TAC_block as Tblock
-from symbol import BasicType, PtrType, ArrayType
+from symbol import Type, BasicType, PtrType, ArrayType
 from symconst import genSimpleConst, genType, genConstant
 
 from collections import deque
@@ -109,16 +109,28 @@ def simple_opt(tblock, ltable):
     return res_block
     '''
 
-def func_handler(block):
-    print('FUNC(before)')
-    print(block)
+class SymbolTable(object):
+    def __init__(self, syms:list):
+        self.syms = syms
+        self.tmps = dict()
+    def get_tmp(self, typ:Type=BasicType('int'), force_new=False):
+        '''
+        获取一个typ类型的临时变量, force_new为真时强制创建一个临时变量,
+        否则尽可能使用已创建过的临时变量
+        '''
+        if not force_new and self.tmps.get(typ) is not None:
+            return self.tmps.get(typ)
+        t = typ.gen_symbol('{tmp}')
+        self.tmps[typ] = t
+        self.syms.append(t)
+        return t
 
-    block = sym_address_handler(block)
+stab = None
 
-    print('FUNC(mid)')
-    print(block)
-
-    return block
+def to_taccpx(block:Tblock ,syms:list) -> Tblock:
+    global stab
+    stab = SymbolTable(syms)
+    return sym_address_handler(block)
 
 '''
     现状：由于我们全用int类型，因此几乎没什么要转化的，但是这点以后可能变更
@@ -188,7 +200,7 @@ def sym_address_handler(block):
             tac_2 = TAC('==', tac.dest, tac.dest, genSimpleConst('0', BasicType('int')))
             src_tac_deque.extendleft([tac_2, tac_1])
         elif tac.op=='!':
-            new_tac = TAC('==', tac.dest, tac.dest genSimpleConst('0', BasicType('int')))
+            new_tac = TAC('==', tac.dest, tac.dest, genSimpleConst('0', BasicType('int')))
             src_tac_deque.appendleft(new_tac)
         else: #default
             newBlock.appendTAC(tac)
@@ -235,9 +247,10 @@ def add_cast_handler(tac):
             new_tac = TAC(tac.op, tac.dest, arg1, new_arg2)
             return (new_tac,)
         else:
-            tac_a = TAC('*', arg2, arg2, genSimpleConst(str(tgt_size), arg2.type))
-            tac_b = TAC('/', arg2, arg2, genSimpleConst(str(tgt_size), arg2.type))
-            return (tac_a, tac, tac_b)
+            tmp = stab.get_tmp()
+            tac_a = TAC('*', tmp, arg2, genSimpleConst(str(tgt_size), arg2.type))
+            tac_b = TAC('+', tac.dest, arg2, tmp)
+            return (tac_a, tac_b)
 
     return Tblock.gen_tac_block(tac).TACs
 

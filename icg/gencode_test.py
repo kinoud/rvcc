@@ -6,7 +6,8 @@ from symbol import Type, Symbol, BasicType, PtrType, StructType, ArrayType, Func
 from symtab import symtab_store, SymTab
 from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
-from taccpx import LocalVarTable, simple_opt, func_handler
+import taccpx
+from taccpx import LocalVarTable, simple_opt
 
 class LoopOpSet:
     def __init__(self):
@@ -92,12 +93,14 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             _dfs_function_pool[class_name] = f
         return _register
 
-    renamed_symbols = {}
+    renamed_symbols = []
     def add_renamed_symbol(x:Symbol):
-        renamed_symbols[x.name] = x
+        renamed_symbols.append(x)
     def show_renamed_symbols():
-        for v in renamed_symbols.values():
+        print('all symbols:')
+        for v in renamed_symbols:
             print('['+repr(v)+']')
+        print('all symbols^')
 
     def dfs(u:c_ast.Node):
         if u is None:                       # deliver empty node
@@ -119,14 +122,14 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             
             # rename begin
             
-            # if class_name in ['FuncDef','For','Compound']:
-            #     config = rename_init(current_symtab)
-            #     rename_block_symbols(block, config)
-            #     rename_symbol(endv, config)
-            # else:
-            #     for x in current_symtab:
-            #         add_renamed_symbol(x) # 全局变量和函数, 不需要重命名, 但仍然加进来
-            #     show_renamed_symbols()
+            if class_name in ['FuncDef','For','Compound']:
+                config = rename_init(current_symtab)
+                rename_block_symbols(block, config)
+                rename_symbol(endv, config)
+            else:
+                for x in current_symtab:
+                    add_renamed_symbol(x) # 全局变量和函数, 不需要重命名, 但仍然加进来
+                show_renamed_symbols()
             
             # rename end
 
@@ -259,7 +262,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         funcRetMgr.exitFunc()
 
         # 接下来对这个整体的FuncDef的TAC作地址化
-        block = func_handler(block)
+        # block = func_handler(block)
 
         return (block, None, None)
 
@@ -788,6 +791,15 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         return (block, None, None)
 
     block, _, _ = dfs(ast)
+    print('-----------before to_taccpx:')
+    print(block)
+    print('-----------before to_taccpx^')
+    block = taccpx.to_taccpx(block, renamed_symbols)
+    print('-----------after to_taccpx:')
+    print(block)
+    print('-----------after to_taccpx^')
+
+
     return block
 
 
@@ -806,4 +818,4 @@ if __name__=='__main__':
     ast.show()
 
     block = genTACs(ast, sts)
-    print(block)
+    
