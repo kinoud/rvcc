@@ -111,12 +111,12 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             (block, endv, endtype) = dfs_fn(u)
             
             # rename begin
-            '''
-            if class_name in ['For','Compound']:
+            
+            if class_name in ['FuncDef','For','Compound']:
                 config = rename_init(current_symtab)
                 rename_block_symbols(block, config)
                 rename_symbol(endv, config)
-            '''
+            
             # rename end
 
             current_symtab = past_symtab
@@ -130,30 +130,27 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     def rename_init(t:SymTab) -> dict:
         nonlocal _rename_block_id
         config = {}
-        config['sym_name'] = '_b%ds' %_rename_block_id
-        config['tmp_name'] = '_b%dt' %_rename_block_id
+        config['prefix'] = '{b%d}' %_rename_block_id
         _rename_block_id += 1
-        config['sym_count'] = 0
-        config['tmp_count'] = 0
         config['symtab'] = t
-        config['renamed_symbols'] = set()
+        config['renamed'] = set()
         return config
 
     def rename_symbol(x:Symbol, config:dict):
-        if x is None or x in config['renamed_symbols']:
+        if x is None or x in config['renamed']:
             return
         t = config['symtab']
         if t.tmps.get(x.name) is not None:
-            name = config['tmp_name'] + str(config['tmp_count'])
-            config['tmp_count'] += 1
+            d = t.tmps
         elif t.syms.get(x.name) is not None:
-            name = config['sym_name'] + str(config['sym_count'])
-            config['sym_count'] += 1
+            d = t.syms
         else:
-            name = None
-        if name is not None:
-            x.name = name
-            config['renamed_symbols'].add(x)
+            d = None
+        if d is not None:
+            d[x.name] = None
+            x.name = config['prefix'] + x.name
+            d[x.name] = x
+            config['renamed'].add(x)
 
     def rename_block_symbols(block:Tblock, config:dict):
         for tac in block.TACs:
