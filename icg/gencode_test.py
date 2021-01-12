@@ -119,14 +119,14 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             
             # rename begin
             
-            if class_name in ['FuncDef','For','Compound']:
-                config = rename_init(current_symtab)
-                rename_block_symbols(block, config)
-                rename_symbol(endv, config)
-            else:
-                for x in current_symtab:
-                    add_renamed_symbol(x) # 全局变量和函数, 不需要重命名, 但仍然加进来
-                show_renamed_symbols()
+            # if class_name in ['FuncDef','For','Compound']:
+            #     config = rename_init(current_symtab)
+            #     rename_block_symbols(block, config)
+            #     rename_symbol(endv, config)
+            # else:
+            #     for x in current_symtab:
+            #         add_renamed_symbol(x) # 全局变量和函数, 不需要重命名, 但仍然加进来
+            #     show_renamed_symbols()
             
             # rename end
 
@@ -301,7 +301,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             block = Tblock(block, newBlock)
         # TODO
         lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
-        block = simple_opt(block, lt)
+        # block = simple_opt(block, lt)
         # TODO
         return (block, None, None)
 
