@@ -2,7 +2,7 @@ from pycparser import c_ast
 from pycparser import CParser
 import argparse
 
-from symbol import Symbol, BasicType, PtrType, StructType, ArrayType, FuncType, BasicSymbol, PtrSymbol, StructSymbol, ArraySymbol
+from symbol import Type, Symbol, BasicType, PtrType, StructType, ArrayType, FuncType, BasicSymbol, PtrSymbol, StructSymbol, ArraySymbol
 from symtab import symtab_store, SymTab
 from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
 from tac import TAC, TAC_block as Tblock
@@ -108,7 +108,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             # current_tvlist = Tvlist(current_tvlist)
             past_symtab = current_symtab
             current_symtab = sts.get_symtab_of(u)
-            (block, endv, endtype) = dfs_fn(u)
+            res = (block, endv, endtype) = dfs_fn(u)
             
             # rename begin
             
@@ -122,9 +122,9 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             current_symtab = past_symtab
             # current_tvlist = past_tvlist
         else:
-            (block, endv, endtype) = dfs_fn(u)
+            res = dfs_fn(u)
 
-        return (block, endv, endtype)
+        return res
 
     _rename_block_id = 0
     def rename_init(t:SymTab) -> dict:
@@ -326,8 +326,49 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     
     @register('Cast')
     def Cast(u):
+        to_type = dfs(u.to_type)
+        print(to_type,'!!!!!!!!!!!')
         print(u.to_type)
         print(u.expr)
+    
+    @register('Typename')
+    def Typename(u) -> Type:
+        return dfs(u.type)
+
+    @register('PtrDecl')
+    def ptr_decl(u:c_ast.PtrDecl) -> PtrType:
+        target_type = dfs(u.type)
+        return PtrType(target_type)
+    
+    @register('Struct')
+    def struct(u:c_ast.Struct)->StructType:
+        '''
+        语法树中出现Struct有两种情况(暂时发现两种),
+        一是定义一个struct,二是使用一个struct.
+        使用struct时,decls=None.
+        '''
+        nonlocal sts
+        # 使用一个struct,而不是定义它
+        t = sts.get_symtab_of(u)
+        if u.decls is None:
+            return t.get_type(u.name) # u.name 是struct的名字(不含'struct')
+        # 定义一个struct
+        member_types = {}
+        for d in u.decls:
+            sym = dfs(d)['symbol'] # 不允许Struct内嵌套定义Struct
+            if sym is not None:
+                member_types[sym.name] = sym.type
+        return StructType(u.name, member_types)
+
+    @register('TypeDecl')
+    def type_decl(u:c_ast.TypeDecl) -> Type:
+        return dfs(u.type) # IdentifierType Struct
+
+    @register('IdentifierType')
+    def identifier_type(u:c_ast.IdentifierType) -> Type:
+        # 暂时认为identifier_type都是BasicType
+        type_str = ' '.join(u.names)
+        return BasicType(type_str)
 
     @register('FuncCall')
     def FuncCall(u):
