@@ -44,9 +44,9 @@ class TAC_block(object):
             self.TACs += block.TACs
 
     @staticmethod
-    def gen_tac_block(tac):
+    def gen_tac_block(*tacs):
         block = TAC_block()
-        block.appendTAC(tac)
+        block.appendTAC(*tacs)
         return block
 
     def appendTAC(self, *newTACs):
