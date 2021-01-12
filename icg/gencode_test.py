@@ -324,6 +324,11 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
         return (block, sym, 'var')
     
+    @register('Cast')
+    def Cast(u):
+        print(u.to_type)
+        print(u.expr)
+
     @register('FuncCall')
     def FuncCall(u):
         '''
