@@ -58,8 +58,7 @@ class LocalVarTable(object):
 
 def simple_opt(tblock, ltable):
 
-    print(tblock)
-
+    #print(tblock)
     new_block = Tblock()
 
     src_tac_deque = deque(tblock.TACs)
@@ -252,8 +251,6 @@ def add_cast_handler(tac):
 
     if not (targetType is None):
         tgt_size = targetType.size
-        print(tgt_size)
-        print(arg2)
         if arg2.isConst:
             new_val = arg2.val * tgt_size
             new_arg2 = genSimpleConst(str(new_val), arg2.type)

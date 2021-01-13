@@ -141,17 +141,18 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             (block, endv, endtype) = dfs_fn(u)
 
         '''
-        # 在全局/函数级别生成地址码
-        if class_name=='FuncDef'  :
-            block = taccpx.to_taccpx(block, renamed_symbols)
-            asm.gen_func(block, renamed_symbols)
+        if class_name=='FuncDef'  :                                  # 进行函数开始的参数、返回值等处理工作
+            #print(u.decl)
+            func_name = u.decl.name
+            print(sts.get_symtab_of(u).get_symbol(func_name))
+            asm_ctrl.gen_func_def(block, renamed_symbols)
         '''
         '''
         elif class_name=='Decl'  :   # Decl是全局还是局部在这里是分辨不出来的  |  先不管了
             block = taccpx.to_taccpx(block, renamed_symbols)
             print(u)
             asm.gen_decl(block)
-        '''            
+        '''
 
         return (block, endv, endtype)
     
@@ -278,7 +279,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
         # 接下来对这个整体的FuncDef的TAC作地址化，不包括参数和返回值等函数头相关处理
         block = taccpx.to_taccpx(block, renamed_symbols)
-        asm_ctrl.gen_func_body(block, renamed_symbols)       # del--- u.decl.name,
+        asm_ctrl.gen_func(block, renamed_symbols, sts.get_symtab_of(u).get_symbol(u.decl.name))
 
         return (block, None, None)
 

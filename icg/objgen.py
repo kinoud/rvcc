@@ -20,7 +20,7 @@ class ASM_Line():
 
 class ASM_VAR_MGR():
     def __init__(self, symbols):
-        self.size = 4           # fp 一开始指向保存的上个帧指针
+        self.size = 8           # 目前只保存两个寄存器量 fp(帧指针), ra(返回地址)
         self.symbols = symbols
         self.vars = {}
         self.waits = {}
@@ -29,6 +29,14 @@ class ASM_VAR_MGR():
         return 'VAR total_size: '+str(self.size)+'\n'+str(self.vars)+'\nwaiting:'+str(self.waits)
     def __repr__(self):
         return str(self)
+
+    def fill_in_param(self, var, offset):
+        res = self.waits.get(var.name)
+        if not (res is None):
+            _, code_list = res
+            for code in code_list:
+                code.args = (code.args[0], code.args[1], str(-offset))
+            self.waits.pop(var.name)
 
     def alloc_var(self, var):
         if var in self.symbols:
@@ -65,7 +73,7 @@ class ASM_VAR_MGR():
         if isinstance(offset, int):
             code = ASM_Line('sw', rt, 'fp', str(-offset))
         else:
-            code = ASM_Line('lw', rt, 'fp', '0')
+            code = ASM_Line('sw', rt, 'fp', '0')
             self.waits[var.name][1].append(code)
         return code
 
@@ -95,7 +103,6 @@ class ASM_Module():
         self.type = type
         self.local_val_mgr = ASM_VAR_MGR(symbols)
         self.local_label_mgr = ASM_LABEL_MGR()
-        self.global_varlist = {}
 
     def add_code(self, *newlines):
         for line in newlines:
@@ -129,7 +136,7 @@ class ASM_Module():
             next_code = ASM_Line('beqz', 't1', '')
             self.local_label_mgr.wait_ptr(next_code, tac.dest.tgt)
             asm_lines.append(next_code)
-        elif tac.op=='label' or tac.op=='ret':                  # 会处理ret当作跳转目标的部分
+        elif tac.op=='label' or tac.op=='ret':                  # 会处理ret当作跳转目标的部分，ret指令在更外层做
             label_name = self.local_label_mgr.alloc_ptr(tac)
             next_code = ASM_Line('label', label_name)
             asm_lines.append(next_code)
@@ -183,23 +190,51 @@ class ASM_Module():
             
         return asm_lines
 
+    def func_extend_with(self, func_decl):
+        params = func_decl.param_symbols
+        ret_val = func_decl.return_symbol
+        param_list = [ret_val]+params
+        print(param_list)
+        offset_list = []
+        frame_size = self.local_val_mgr.size
+        param_offset = frame_size
+        for param in param_list:
+            offset_list.append(param_offset)
+            self.local_val_mgr.fill_in_param(param, param_offset)
+            param_offset += param.size
+            frame_size += param.size
+        
+        enter_code = []
+        enter_code.append(ASM_Line('label', func_decl.name))
+        enter_code.append(ASM_Line('sw', 'fp', 'sp', '-4'))
+        enter_code.append(ASM_Line('sw', 'ra', 'sp', '-8'))
+        enter_code.append(ASM_Line('addi', 'fp', 'sp', '-4'))
+        if len(offset_list)>=8:
+            print('Error: 暂不支持过多参数！会忽略靠后的参数')
+        for i in range(8):
+            if i>=len(offset_list):
+                break
+            p_offset = offset_list[i]
+            enter_code.append(ASM_Line('sw', 'a'+str(i), 'fp', str(-p_offset)))
+        enter_code.append(ASM_Line('addi', 'sp', 'sp', str(-frame_size)))
+        exit_code = []
+        exit_code.append(ASM_Line('addi', 'sp', 'sp', str(frame_size)))
+        exit_code.append(ASM_Line('lw', 'fp', 'sp', '-4'))
+        exit_code.append(ASM_Line('lw', 'ra', 'sp', '-8'))
+        exit_code.append(ASM_Line('ret'))
+        self.code = enter_code + self.code + exit_code
+
     @staticmethod
     def gen_decl(self, block):
         print('decl block')
         print(block)
 
     @staticmethod
-    def gen_func(self, block, symbols):
-        print('FUNC ASM MODULE')
-        print(symbols)
-        print(block)
-
-    @staticmethod
     def gen_func_body(block, symbols):
         asm = ASM_Module('func_body', symbols)
-        print('FUNC_BODY ASM MODULE')
-        print(symbols)
-        print(block)
+        # print('FUNC_BODY ASM MODULE')
+        # print(symbols)
+        # print(block)
         tac_list = block.TACs
         tac_list.reverse()
         first_tac = tac_list.pop()
@@ -207,22 +242,19 @@ class ASM_Module():
         # next_asm_line = ASM_Line('label', func_name)         没到生成标签的时候
         # asm.add_code(next_asm_line)
         for tac in reversed(tac_list):
+            print(tac)
             if tac.op=='ret':                   #  暂时先不考虑返回地址保存相关的问题
                 asm.add_code(*asm.jump_tac_handler(tac))
-                next_asm_line = ASM_Line('ret')
-                asm.add_code(next_asm_line)
             elif tac.op=='goto' or tac.op=='ifz' or tac.op=='label':
                 asm.add_code(*asm.jump_tac_handler(tac))
             else:
                 asm.add_code(*asm.normal_tac_handler(tac))
 
         asm.complete_labels()
-        print(asm.local_val_mgr)
-        print(asm)
         return asm
 
     def  __str__(self):
-        s = ''
+        s = str(self.local_val_mgr) + '\n'
         for line in self.code:
             s += str(line) + '\n'
         return s
@@ -234,12 +266,12 @@ class ASM_CTRL():
     def __init__(self):
         self.location = 'global'
         self.funcDefs = []
-        self.current_func_body = None
 
-    def gen_func_body(self, block, symbols):
-        self.current_func_body = ASM_Module.gen_func_body(block, symbols)
+    def gen_func(self, block, symbols, func_decl):
+        func_asm = ASM_Module.gen_func_body(block, symbols)
+        print(func_asm)
+        func_asm.func_extend_with(func_decl)
+        print(func_asm)
 
-    def gen_func_def():
-        pass
 
 asm_ctrl = ASM_CTRL()
