@@ -201,6 +201,20 @@ def sym_address_handler(block):
         elif tac.op=='!':
             new_tac = TAC('==', tac.dest, tac.dest, genSimpleConst('0', BasicType('int')))
             src_tac_deque.appendleft(new_tac)
+        elif tac.op=='==' or tac.op=='!=':
+            assert(len(tac.args)==2)
+            if tac.args[0].isConst:
+                new_tac = TAC(tac.op, tac.dest, tac.args[1], tac.args[0])
+            else:
+                new_tac = TAC(tac.op, tac.dest, *tac.args)
+            if tac.args[1].isConst and tac.args[1].val==0:
+                new_tac = TAC(tac.op+'0', new_tac.dest, new_tac.args[0])
+                newBlock.appendTAC(new_tac)
+            else:
+                tmp = stab.get_tmp()
+                tac_1 = TAC('-', tmp, *new_tac.args)      # 符号暂设为默认
+                tac_2 = TAC(tac.op, new_tac.dest, tmp, genSimpleConst('0', BasicType('int')))
+                src_tac_deque.extendleft([tac_2, tac_1])
         else: #default
             newBlock.appendTAC(tac)
     return newBlock

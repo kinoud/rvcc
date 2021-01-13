@@ -8,7 +8,7 @@ from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genTyp
 from tac import TAC, TAC_block as Tblock
 import taccpx
 from taccpx import LocalVarTable, simple_opt
-from objgen import asm
+from objgen import asm_ctrl
 
 class LoopOpSet:
     def __init__(self):
@@ -140,20 +140,17 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         else:
             (block, endv, endtype) = dfs_fn(u)
 
+        '''
         # 在全局/函数级别生成地址码
         if class_name=='FuncDef'  :
-            print('-----------before to_taccpx:')
-            print(block)
-            print('-----------before to_taccpx^')
             block = taccpx.to_taccpx(block, renamed_symbols)
-            print('-----------after to_taccpx:')
-            print(block)
-            print('-----------after to_taccpx^')
+            asm.gen_func(block, renamed_symbols)
+        '''
         '''
         elif class_name=='Decl'  :   # Decl是全局还是局部在这里是分辨不出来的  |  先不管了
             block = taccpx.to_taccpx(block, renamed_symbols)
             print(u)
-            asm.genDecl(block)
+            asm.gen_decl(block)
         '''            
 
         return (block, endv, endtype)
@@ -279,8 +276,9 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             tac.dest = GotoSymbol(func_end)
         funcRetMgr.exitFunc()
 
-        # 接下来对这个整体的FuncDef的TAC作地址化
-        # block = func_handler(block)
+        # 接下来对这个整体的FuncDef的TAC作地址化，不包括参数和返回值等函数头相关处理
+        block = taccpx.to_taccpx(block, renamed_symbols)
+        asm_ctrl.gen_func_body(block, renamed_symbols)       # del--- u.decl.name,
 
         return (block, None, None)
 
