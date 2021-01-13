@@ -118,7 +118,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             # current_tvlist = Tvlist(current_tvlist)
             past_symtab = current_symtab
             current_symtab = sts.get_symtab_of(u)
-            res = (block, endv, endtype) = dfs_fn(u)
+            (block, endv, endtype) = dfs_fn(u)
             
             # rename begin
             
@@ -135,10 +135,29 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
             current_symtab = past_symtab
             # current_tvlist = past_tvlist
-        else:
-            res = dfs_fn(u)
 
-        return res
+        else:
+            (block, endv, endtype) = dfs_fn(u)
+
+        # 在全局/函数级别生成地址码
+        if class_name=='FuncDef'  :
+            print('-----------before to_taccpx:')
+            print(block)
+            print('-----------before to_taccpx^')
+            block = taccpx.to_taccpx(block, renamed_symbols)
+            print('-----------after to_taccpx:')
+            print(block)
+            print('-----------after to_taccpx^')
+        elif class_name=='Decl'  :   # 注意FuncDef直接持有的Decl我们并不会Dfs到
+            print('-----------before to_taccpx:')
+            print(block)
+            print('-----------before to_taccpx^')
+            block = taccpx.to_taccpx(block, renamed_symbols)
+            print('-----------after to_taccpx:')
+            print(block)
+            print('-----------after to_taccpx^')
+
+        return (block, endv, endtype)
     
     _rename_block_id = 0
     def rename_init(t:SymTab) -> dict:
@@ -791,15 +810,6 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         return (block, None, None)
 
     block, _, _ = dfs(ast)
-    print('-----------before to_taccpx:')
-    print(block)
-    print('-----------before to_taccpx^')
-    block = taccpx.to_taccpx(block, renamed_symbols)
-    print('-----------after to_taccpx:')
-    print(block)
-    print('-----------after to_taccpx^')
-
-
     return block
 
 
@@ -818,4 +828,4 @@ if __name__=='__main__':
     ast.show()
 
     block = genTACs(ast, sts)
-    
+    print(block)
