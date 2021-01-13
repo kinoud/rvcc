@@ -176,7 +176,7 @@ def sym_address_handler(block):
                     src_tac_deque.appendleft(tac_2)
                 elif tac.args[1].isConst:
                     neg_const = genSimpleConst(str(-tac.args[1].val), tac.args[1].type)
-                    add_tac = TAC('+i', tac.dest, tac.args[0], neg_const)
+                    add_tac = TAC('+', tac.dest, tac.args[0], neg_const)
                     src_tac_deque.appendleft(add_tac)
                 else:
                     newBlock.appendTAC(*sub_cast_handler(tac))

@@ -8,6 +8,7 @@ from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genTyp
 from tac import TAC, TAC_block as Tblock
 import taccpx
 from taccpx import LocalVarTable, simple_opt
+from objgen import asm
 
 class LoopOpSet:
     def __init__(self):
@@ -148,14 +149,12 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             print('-----------after to_taccpx:')
             print(block)
             print('-----------after to_taccpx^')
-        elif class_name=='Decl'  :   # 注意FuncDef直接持有的Decl我们并不会Dfs到
-            print('-----------before to_taccpx:')
-            print(block)
-            print('-----------before to_taccpx^')
+        '''
+        elif class_name=='Decl'  :   # Decl是全局还是局部在这里是分辨不出来的  |  先不管了
             block = taccpx.to_taccpx(block, renamed_symbols)
-            print('-----------after to_taccpx:')
-            print(block)
-            print('-----------after to_taccpx^')
+            print(u)
+            asm.genDecl(block)
+        '''            
 
         return (block, endv, endtype)
     
