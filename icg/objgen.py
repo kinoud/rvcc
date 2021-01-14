@@ -1,3 +1,4 @@
+from collections import deque
 
 ASM_AUTO_LABEL_CNT = 0
 
@@ -109,19 +110,21 @@ class ASM_Module():
             self.code.append(line)
 
     def complete_labels(self):
-        code_cnt = len(self.code)
-        for i in range(code_cnt):
-            for code_, tac in self.local_label_mgr.waitings:
-                if not (self.code[i] is code_):
-                    continue
-                for tac_, label_name in self.local_label_mgr.labels:
-                    if tac is tac_:
-                        if code_.op=='j':
-                            code_.args=(label_name,)
-                        elif code_.op=='beqz':
-                            code_.args=(code_.args[0], label_name)
-                        else: # 可能包括函数调用等，还未考虑
-                            pass
+        x = {}
+        for code_, tac in self.local_label_mgr.waitings:
+            id = tac.id
+            if id not in x:
+                x[id]=[]
+            x[id].append(code_)
+        for tac_, label_name in self.local_label_mgr.labels:
+            for code_ in x[tac_.id]:
+                if tac is tac_:
+                    if code_.op=='j':
+                        code_.args=(label_name,)
+                    elif code_.op=='beqz':
+                        code_.args=(code_.args[0], label_name)
+                    else: # 可能包括函数调用等，还未考虑
+                        pass
 
     def jump_tac_handler(self, tac): # tac.op=='goto' or tac.op=='ifz' or tac.op=='label'
         asm_lines = []
@@ -214,15 +217,96 @@ class ASM_Module():
         for i in range(8):
             if i>=len(offset_list):
                 break
+            # if i==0:  # 暂时假设有返回值（尚不支持void）
+            #    continue 
             p_offset = offset_list[i]
             enter_code.append(ASM_Line('sw', 'a'+str(i), 'fp', str(-p_offset)))
         enter_code.append(ASM_Line('addi', 'sp', 'sp', str(-frame_size)))
+        
+        # 暂时假设有返回值（尚不支持void）
         exit_code = []
+        exit_code.append(ASM_Line('lw', 'a0', 'fp', str(-offset_list[0])))
         exit_code.append(ASM_Line('addi', 'sp', 'sp', str(frame_size)))
         exit_code.append(ASM_Line('lw', 'fp', 'sp', '-4'))
         exit_code.append(ASM_Line('lw', 'ra', 'sp', '-8'))
         exit_code.append(ASM_Line('ret'))
         self.code = enter_code + self.code + exit_code
+
+    def del_mv(self):
+        new_code = []
+        for this_code in self.code:
+            if len(new_code)>0:
+                last_code = new_code[-1]
+                if last_code.op=='mv' and this_code.op=='mv' and (last_code.args==this_code.args or
+                        (last_code.args[0], last_code.args[1])==(this_code.args[1], this_code.args[0])):
+                    pass # 已经mv a,b 那么mv a,b 和mv b, a可删去
+                else:
+                    new_code.append(this_code)
+            else:
+                new_code.append(this_code)
+        self.code = new_code
+
+    def clear_sw(self):
+        # 没有被lw过的位置自然不需要去sw    
+        mem_list = {} # {'0': '0'}
+        for code in self.code:
+            if code.op=='lw' and code.args[1]=='fp':
+                mem_list[code.args[2]] = code.args[2]
+        new_code = []
+        for code in self.code:
+            if code.op=='sw' and code.args[1]=='fp' and not (code.args[2] in mem_list):
+                pass
+            else:
+                new_code.append(code)
+        self.code = new_code
+
+    def pick_up_lw(self):
+        old_code = deque()
+        for code in self.code:
+            old_code.append((True, code))
+        new_code = deque()
+        while len(old_code)>0:
+            (toDo, this_code)  = old_code.popleft()
+            if toDo and this_code.op=='lw' and this_code.args[1]=='fp':
+                to_continue = True
+                while to_continue and len(new_code)>0:
+                    (_, last_code) = new_code[-1]
+                    # print(last_code)
+                    # print(this_code)
+                    # print(this_code.args[0] in last_code.args)
+                    if last_code.op in [                             # 是跳转相关语句时截止
+                            'label', 'ret'
+                            ] or last_code.op.startswith('j') or last_code.op.startswith('b'):
+                        to_continue = False
+                        new_code.append((False, this_code))
+                    elif len(last_code.args)>0 and last_code.args[0]=='fp': # 上一句目标数是fp时截止
+                        to_continue = False
+                        new_code.append((False, this_code))                        
+                    elif last_code.op=='sw' and last_code.args[1]=='fp' and last_code.args[2]==this_code.args[2]:
+                        if last_code.args[0]==this_code.args[0]:   # rd先sw到变量，再取出到rd，故删去lw
+                            to_continue = False
+                        else:                                      # rt先sw到变量，再取出到rd，故化简为mv
+                            to_continue = False
+                            new_code.append((False, ASM_Line('mv', this_code.args[0], last_code.args[0])))
+                    elif last_code.op=='lw' and last_code.args[1]=='fp' and last_code.args[2]==this_code.args[2]:
+                        if last_code.args[0]==this_code.args[0]:   # 重复lw，删除后一个
+                            to_continue = False
+                        else:                                      # 重复lw到不同寄存器，这一条改为mv
+                            to_continue = False
+                            new_code.append((False, ASM_Line('mv', this_code.args[0], last_code.args[0])))
+                    elif this_code.args[0] in last_code.args:                  # lw, sw以外的操作涉及该寄存器
+                        to_continue = False
+                        new_code.append((False, this_code))
+                    else:                                          # 能安全地把lw指令前移
+                        new_code.pop()
+                        old_code.appendleft((False, last_code))
+
+            else:
+                new_code.append((False, this_code))
+        code_set = []
+        for _, code in new_code:
+            code_set.append(code)
+        self.code = code_set
 
     @staticmethod
     def gen_decl(self, block):
@@ -269,8 +353,11 @@ class ASM_CTRL():
 
     def gen_func(self, block, symbols, func_decl):
         func_asm = ASM_Module.gen_func_body(block, symbols)
-        print(func_asm)
         func_asm.func_extend_with(func_decl)
+        print(func_asm)
+        func_asm.pick_up_lw()
+        func_asm.clear_sw()
+        func_asm.del_mv()
         print(func_asm)
 
 
