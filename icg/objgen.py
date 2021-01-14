@@ -1,6 +1,6 @@
 from collections import deque
 
-from symbol import PtrType, ArrayType, StructType
+from symbol import PtrType, ArrayType, StructType, FuncSymbol
 
 ASM_AUTO_LABEL_CNT = 0
 
@@ -51,6 +51,7 @@ class ASM_VAR_MGR():
 
         for var_name in self.vars:
             self.waits.pop(var_name, None)
+        self.vars = {}
 
 
     def fill_in_param(self, var): #, offset):
@@ -142,6 +143,33 @@ class ASM_Module():
     def add_code(self, *newlines):
         for line in newlines:
             self.code.append(line)
+
+    def export_as_func(self):
+        for var, wait_list in self.local_val_mgr.waits.values():
+            # print(var, wait_list)
+            for code in wait_list:
+                if code.op=='addi':
+                    code.op = 'la'
+                    code.args = (code.args[0], var.name)
+                elif code.op=='lw':
+                    code.args = (code.args[0], var.name)
+                elif code.op=='sw':
+                    code.args = (code.args[0], var.name, 't4')
+                else:
+                    print('ASM Error: illegal ref of global symbol.')
+
+        return self.code
+        '''
+        for _, waiting_codes in self.local_val_mgr.waits.values():
+            for code in waiting_codes:
+                code.marks['g'] = True
+        ex_code = []
+        for code in self.code:
+            if code.marks.get('g'):
+                ex_code.append(ASM_Line('la', '', ''))
+            ex_code.append(code)
+        return (ex_code, self.local_val_mgr.waits)
+        '''
 
     def complete_labels(self):
         for code_, tac in self.local_label_mgr.waitings:
@@ -337,7 +365,6 @@ class ASM_Module():
         params = func_decl.param_symbols
         ret_val = func_decl.return_symbol
         param_list = [ret_val]+params
-        print(param_list)
         for param in param_list:
             self.local_val_mgr.fill_in_param(param)
         frame_size = self.local_val_mgr.size
@@ -444,10 +471,12 @@ class ASM_Module():
             code_set.append(code)
         self.code = code_set
 
+    '''
     @staticmethod
     def gen_decl(self, block):
         print('decl block')
         print(block)
+    '''
 
     @staticmethod
     def gen_func_body(block, symbols):
@@ -498,18 +527,74 @@ class ASM_Module():
 
 class ASM_CTRL():
     def __init__(self):
-        self.location = 'global'
         self.funcDefs = []
+        self.gvars = {}
+        self.result = []
 
     def gen_func(self, block, symbols, func_decl):
         func_asm = ASM_Module.gen_func_body(block, symbols)
-        print(func_asm)
         func_asm.func_extend_with(func_decl)
-        print(func_asm)
         func_asm.pick_up_lw()
         func_asm.clear_sw()
         func_asm.del_mv()
         print(func_asm)
+        self.funcDefs.append(func_asm.export_as_func())
 
+    def gen_gvar_init(self, block):        
+        if len(block.TACs)==0:
+            return
+        if len(block.TACs)>1:
+            print('Error: complicit global variable init not supported now.')
+            return
+        ginit_tac = block.TACs[0]
+        if ginit_tac.op!='=':
+            print('Error: complicit global variable init not supported now.')
+            return
+        if not ginit_tac.args[0].isConst:
+            print('Error: global variable can only be inited as a constant.')
+            return
+        self.gvars[ginit_tac.dest.name] = ginit_tac.args[0].val
+
+    def gen_total(self, all_symbols):
+        global_symbols = {}
+        for symbol in all_symbols:
+            if not symbol.name.startswith('{'):
+                global_symbols[symbol.name] = symbol
+        '''
+        print(global_symbols)
+        for func_def in self.funcDefs:
+            for code in func_def:
+                print(code)
+        print(self.gvars)
+        '''
+        code_text = []
+        for symbol_name in global_symbols:
+            code_text.append(ASM_Line('.global', symbol_name))
+        code_text.append(ASM_Line('.section', '.text'))
+
+        code_data = []
+        code_data.append(ASM_Line('.section', '.data'))
+        code_data.append(ASM_Line('.align', '2'))
+        for symbol_name in global_symbols:
+            if isinstance(global_symbols[symbol_name], FuncSymbol):
+                continue
+            code_data.append(ASM_Line('label', symbol_name))
+            value = self.gvars.get(symbol_name)
+            if value is None:
+                code_data.append(ASM_Line('.zero', str(global_symbols[symbol_name].size//4)))
+            else:
+                code_data.append(ASM_Line('.word', str(value)))
+
+        total_code = code_text
+        for codes in self.funcDefs:
+            total_code += codes
+        total_code += code_data
+        self.result = total_code
+
+    def gen_code_text(self):
+        text = ''
+        for code in self.result:
+            text += str(code) + '\n'
+        return text
 
 asm_ctrl = ASM_CTRL()

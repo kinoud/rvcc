@@ -130,7 +130,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             else:
                 for x in current_symtab:
                     add_renamed_symbol(x) # 全局变量和函数, 不需要重命名, 但仍然加进来
-                show_renamed_symbols()
+                # show_renamed_symbols()
             
             # rename end
 
@@ -140,19 +140,9 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         else:
             (block, endv, endtype) = dfs_fn(u)
 
-        '''
-        if class_name=='FuncDef'  :                                  # 进行函数开始的参数、返回值等处理工作
-            #print(u.decl)
-            func_name = u.decl.name
-            print(sts.get_symtab_of(u).get_symbol(func_name))
-            asm_ctrl.gen_func_def(block, renamed_symbols)
-        '''
-        '''
-        elif class_name=='Decl'  :   # Decl是全局还是局部在这里是分辨不出来的  |  先不管了
-            block = taccpx.to_taccpx(block, renamed_symbols)
-            print(u)
-            asm.gen_decl(block)
-        '''
+        
+        if class_name=='FileAST':
+            asm_ctrl.gen_total(renamed_symbols)
 
         return (block, endv, endtype)
     
@@ -211,7 +201,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
                 return (block, res, resType)
 
             else: # TODO
-                # 暂时这么做，应该会有bug
+                # 暂时这么做，或许会有bug
                 newTmp = current_symtab.gen_tmp_basic_symbol(targetType)
             
             newTAC = TAC('get', newTmp, res)
@@ -247,18 +237,18 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     @register('FileAST')
     def FileAST(u):
         '''
-        为每个子节点生成block并合并成1个block, 然后做简单的代码优化(simple_opt)
+        为每个子节点生成block
         '''
-        block = Tblock()
+        # block = Tblock()
         for v in u.ext:
             (newBlock, _, _) = dfs(v)
-            block = Tblock(block, newBlock)
+            # block = Tblock(block, newBlock)
 
-        # lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
-        # block = simple_opt(block, lt)
-        # TODO
+            v_type = type(v).__name__    # 该结点类型。FuncDef已经处理了
+            if v_type=='Decl':
+                asm_ctrl.gen_gvar_init(newBlock)
 
-        return (block, None, None)
+        return (Tblock(), None, None)
 
     @register('FuncDef')
     def FuncDef(u):
@@ -294,9 +284,6 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             newTAC = TAC("=", u_sym, rtmp)
             block = Tblock(block, rblock)
             block.appendTAC(newTAC)
-
-        print('DEcl')
-        print(block)
 
         return (block, None, None)
 
@@ -845,5 +832,7 @@ if __name__=='__main__':
     sts.show(ast)
     ast.show()
 
-    block = genTACs(ast, sts)
-    print(block)
+    block = genTACs(ast, sts)   # 现在没有输出了
+
+    print('RESULT')
+    print(asm_ctrl.gen_code_text())
