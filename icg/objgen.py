@@ -309,7 +309,7 @@ class ASM_Module():
             '/': 'div',
             '/u': 'divu',
             '%': 'rem',
-            '%%u': 'remu',
+            '%u': 'remu',
         }
         t_op = op_cast.get(op)
         if t_op is None:
@@ -354,8 +354,14 @@ class ASM_Module():
             else:
                 t_arg2 = tac.args[1]
                 if t_arg2.isConst:
-                    next_code = ASM_Line(t_op, 't3', 't1', str(t_arg2.val))
-                    asm_lines.append(next_code)
+                    if op in ['*', '/', '/u', '%', '%u']:
+                        next_code = ASM_Line('li', 't2', str(t_arg2.val))
+                        asm_lines.append(next_code)
+                        next_code = ASM_Line(t_op, 't3', 't1', 't2')
+                        asm_lines.append(next_code)
+                    else:
+                        next_code = ASM_Line(t_op, 't3', 't1', str(t_arg2.val))
+                        asm_lines.append(next_code)
                 else:
                     next_code = self.local_val_mgr.lw(t_arg2, 't2')
                     asm_lines.append(next_code)
