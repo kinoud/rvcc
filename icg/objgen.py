@@ -27,32 +27,60 @@ class ASM_VAR_MGR():
         self.symbols = symbols
         self.vars = {}
         self.waits = {}
+        self.offset_info = {}
 
     def __str__(self):
-        return 'VAR total_size: '+str(self.size)+'\n'+str(self.vars)+'\nwaiting:'+str(self.waits)
+        return 'VAR total_size: '+str(self.size)+'\n'+str(self.vars)+'\nwaiting:'+str(self.waits)+'\nsolved:'+str(self.offset_info)
     def __repr__(self):
         return str(self)
 
-    def fill_in_param(self, var, offset):
-        res = self.waits.get(var.name)
-        if not (res is None):
+    def solve_func_var(self):
+
+        start_ptr = -self.size + 4
+
+        for var in self.vars.values():
+            res = self.waits.get(var.name)
+            if res is None:
+                print('Warning: unnecessary local variable.<'+str(var)+'>')
+                continue
+            self.offset_info[var.name] = (var, start_ptr)
             _, code_list = res
             for code in code_list:
-                code.args = (code.args[0], code.args[1], str(-offset))
-            self.waits.pop(var.name)
+                code.args = (code.args[0], code.args[1], str(start_ptr))
+            start_ptr += var.size
+
+        for var_name in self.vars:
+            self.waits.pop(var_name, None)
+
+
+    def fill_in_param(self, var): #, offset):
+        res = self.waits.get(var.name)
+        if not (res is None):
+            # _, code_list = res
+            #for code in code_list:
+            #    code.args = (code.args[0], code.args[1], str(-offset))
+            #self.waits.pop(var.name)
+            self.vars[var.name] = var
+            self.size += var.size
 
     def alloc_var(self, var):
+        #if var in self.symbols:
+        #    self.vars[var.name] = (var, [])     # self.size)
+        #    self.size += var.size               # 现在，所有offset都等到函数确定时再填入
+        #else:
+        #    self.waits[var.name] = (var, [])
+        self.waits[var.name] = (var, [])
         if var in self.symbols:
-            self.vars[var.name] = (var, self.size)
+            self.vars[var.name] = var
             self.size += var.size
-        else:
-            self.waits[var.name] = (var, [])
+
 
     def get_var(self, var):
-        v = self.vars.get(var.name)
-        if v is None:
-            v = self.waits.get(var.name)
-        return v
+        #v = self.vars.get(var.name)
+        #if v is None:
+        #    v = self.waits.get(var.name)
+        #return v
+        return self.waits.get(var.name)
 
     def make_address(self, var):        # 获得变量在fp下的偏移
         res = self.get_var(var)
@@ -94,7 +122,9 @@ class ASM_LABEL_MGR():
         ))
 
     def alloc_ptr(self, tgt_tac):
+        global ASM_AUTO_LABEL_CNT
         new_label_name = '__auto_'+str(ASM_AUTO_LABEL_CNT)
+        ASM_AUTO_LABEL_CNT += 1
         self.labels.append((
             tgt_tac,       #     'tac': 
             new_label_name #    'label': 
@@ -198,6 +228,19 @@ class ASM_Module():
                 asm_lines.append(next_code)
                 next_code = ASM_Line('sw', 't3', 't1', '0')
                 asm_lines.append(next_code)
+            elif op=='get':
+                dest = tac.dest
+                arg = tac.args[0]
+                if arg.isConst:
+                    next_code = ASM_Line('li', 't1', str(arg.val))
+                    asm_lines.append(next_code)
+                else:
+                    next_code = self.local_val_mgr.lw(arg, 't1')
+                    asm_lines.append(next_code)
+                next_code = ASM_Line('lw', 't3', 't1', '0')
+                asm_lines.append(next_code)
+                next_code = self.local_val_mgr.sw(dest, 't3')
+                asm_lines.append(next_code)
             else:
                 print('op not found')
         else:                                 # 进入这个分支前提是有参数1，并且不是立即数
@@ -231,39 +274,35 @@ class ASM_Module():
         ret_val = func_decl.return_symbol
         param_list = [ret_val]+params
         print(param_list)
-        offset_list = []
-        frame_size = self.local_val_mgr.size
-        param_offset = frame_size
         for param in param_list:
-            offset_list.append(param_offset)
-            self.local_val_mgr.fill_in_param(param, param_offset)
-            param_offset += param.size
-            frame_size += param.size
+            self.local_val_mgr.fill_in_param(param)
+        frame_size = self.local_val_mgr.size
         
         enter_code = []
         enter_code.append(ASM_Line('label', func_decl.name))
         enter_code.append(ASM_Line('sw', 'fp', 'sp', '-4'))
         enter_code.append(ASM_Line('sw', 'ra', 'sp', '-8'))
         enter_code.append(ASM_Line('addi', 'fp', 'sp', '-4'))
-        if len(offset_list)>=8:
+        if len(param_list)>=8:
             print('Error: 暂不支持过多参数！会忽略靠后的参数')
         for i in range(8):
-            if i>=len(offset_list):
+            if i>=len(param_list):
                 break
-            # if i==0:  # 暂时假设有返回值（尚不支持void）
-            #    continue 
-            p_offset = offset_list[i]
-            enter_code.append(ASM_Line('sw', 'a'+str(i), 'fp', str(-p_offset)))
+            if i==0:  # 暂时假设一定有有返回值（尚不支持void）
+                continue
+            enter_code.append(self.local_val_mgr.sw(param_list[i], 'a'+str(i)))
         enter_code.append(ASM_Line('addi', 'sp', 'sp', str(-frame_size)))
         
         # 暂时假设有返回值（尚不支持void）
         exit_code = []
-        exit_code.append(ASM_Line('lw', 'a0', 'fp', str(-offset_list[0])))
+        exit_code.append(self.local_val_mgr.lw(param_list[0], 'a0')) # ('lw', 'a0', 'fp', str(-offset_list[0])))
         exit_code.append(ASM_Line('addi', 'sp', 'sp', str(frame_size)))
         exit_code.append(ASM_Line('lw', 'fp', 'sp', '-4'))
         exit_code.append(ASM_Line('lw', 'ra', 'sp', '-8'))
         exit_code.append(ASM_Line('ret'))
         self.code = enter_code + self.code + exit_code
+
+        self.local_val_mgr.solve_func_var()
 
     def del_mv(self):
         new_code = []
@@ -281,7 +320,7 @@ class ASM_Module():
 
     def clear_sw(self):
         # 没有被lw过的位置自然不需要去sw    
-        mem_list = {} # {'0': '0'}
+        mem_list = {'0':'0', '-4': '-4'}               # 不能清除未决变量和保存变量
         for code in self.code:
             if code.op=='lw' and code.args[1]=='fp':
                 mem_list[code.args[2]] = code.args[2]
@@ -386,6 +425,7 @@ class ASM_CTRL():
 
     def gen_func(self, block, symbols, func_decl):
         func_asm = ASM_Module.gen_func_body(block, symbols)
+        print(func_asm)
         func_asm.func_extend_with(func_decl)
         print(func_asm)
         func_asm.pick_up_lw()
