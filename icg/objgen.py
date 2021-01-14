@@ -144,6 +144,16 @@ class ASM_Module():
             self.code.append(line)
 
     def complete_labels(self):
+        for code_, tac in self.local_label_mgr.waitings:
+            for tac_, label_name in self.local_label_mgr.labels:
+                if tac is tac_:
+                    if code_.op=='j':
+                        code_.args=(label_name,)
+                    elif code_.op=='beqz':
+                        code_.args=(code_.args[0], label_name)
+                    else: # 可能包括函数调用等，还未考虑
+                        pass
+        '''
         x = {}
         for code_, tac in self.local_label_mgr.waitings:
             id = tac.id
@@ -159,6 +169,28 @@ class ASM_Module():
                         code_.args=(code_.args[0], label_name)
                     else: # 可能包括函数调用等，还未考虑
                         pass
+        '''
+
+    def func_call_handler(self, tac, param_list):
+
+        asm_lines = []
+        param_cnt = len(param_list)
+        if param_cnt>=8:
+            print('Waring: too much params, throw the extra params.')
+        for param in param_list:
+            if param_cnt<8:
+                if param.isConst:
+                    next_code = ASM_Line('li', 'a'+str(param_cnt), str(param.val))
+                else:
+                    next_code = self.local_val_mgr.sw(param, 'a'+str(param_cnt))
+                asm_lines.append(next_code)
+            param_cnt -= 1
+        
+        next_code = ASM_Line('call', tac.args[0].name)
+        asm_lines.append(next_code)
+        next_code = self.local_val_mgr.sw(tac.dest, 'a0')
+        asm_lines.append(next_code)
+        return asm_lines
 
     def jump_tac_handler(self, tac): # tac.op=='goto' or tac.op=='ifz' or tac.op=='label'
         asm_lines = []
@@ -326,7 +358,7 @@ class ASM_Module():
                 mem_list[code.args[2]] = code.args[2]
         new_code = []
         for code in self.code:
-            if code.op=='sw' and code.args[1]=='fp' and not (code.args[2] in mem_list):
+            if code.op=='sw' and code.args[0].startswith('t') and code.args[1]=='fp' and not (code.args[2] in mem_list):
                 pass
             else:
                 new_code.append(code)
@@ -347,7 +379,7 @@ class ASM_Module():
                     # print(this_code)
                     # print(this_code.args[0] in last_code.args)
                     if last_code.op in [                             # 是跳转相关语句时截止
-                            'label', 'ret'
+                            'label', 'ret', 'call'                   # TODO: 这个列表可能还需要补充
                             ] or last_code.op.startswith('j') or last_code.op.startswith('b'):
                         to_continue = False
                         new_code.append((False, this_code))
@@ -397,9 +429,23 @@ class ASM_Module():
         assert(first_tac.op=='label')
         # next_asm_line = ASM_Line('label', func_name)         没到生成标签的时候
         # asm.add_code(next_asm_line)
+        preparing_func_call = False
+        func_param_list = []
         for tac in reversed(tac_list):
             print(tac)
-            if tac.op=='ret':                   #  暂时先不考虑返回地址保存相关的问题
+            if tac.op=='param' or tac.op=='call':
+                preparing_func_call = True
+            if preparing_func_call:
+                if tac.op=='call':
+                    asm.add_code(*asm.func_call_handler(tac, func_param_list))
+                    func_param_list = []
+                    preparing_func_call = False
+                elif tac.op=='param':
+                    func_param_list.append(tac.dest)
+                else:     # Illegal: param call 必须连成一个序列
+                    print('TAC code Error: illegal func call sequence.')
+                    break
+            elif tac.op=='ret':                   #  暂时先不考虑返回地址保存相关的问题
                 asm.add_code(*asm.jump_tac_handler(tac))
             elif tac.op=='goto' or tac.op=='ifz' or tac.op=='label':
                 asm.add_code(*asm.jump_tac_handler(tac))
