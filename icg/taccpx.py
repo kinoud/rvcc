@@ -221,6 +221,10 @@ def sym_address_handler(block):
                 tac_1 = TAC('-', tmp, *new_tac.args)      # 符号暂设为默认
                 tac_2 = TAC(tac.op, new_tac.dest, tmp, genSimpleConst('0', BasicType('int')))
                 src_tac_deque.extendleft([tac_2, tac_1])
+        elif tac.op=='/' or tac.op=='%':
+            if tac.dest.type.name.startswith('unsigned'):
+                tac.op += 'u'
+            newBlock.appendTAC(tac)
         else: #default
             newBlock.appendTAC(tac)
     return newBlock

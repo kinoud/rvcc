@@ -410,9 +410,8 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         basic类型和ptr类型变量直接使用
         struct类型变量原地拷贝，然后传指针
         '''
-        (funcNameBlock, funcNameVal, funcNameType) = dfs(u.name)
+        (funcNameBlock, funcNameVal, _) = dfs(u.name)
         argList = u.args.exprs # u.args是ExprList, 但是要用特殊办法展开
-        # print((funcNameBlock, funcNameVal, funcNameType))
         paramList = []
         argBlock = Tblock()
         for arg in reversed(argList):
@@ -645,7 +644,6 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         endv = None
         if leftRes.isConst and rightRes.isConst:
             endv = genConstant(u.op, leftRes, rightRes)
-            # print(endv)
         else:
             endvType = genType(u.op, leftRes, rightRes)
             newTmp = current_symtab.gen_tmp_basic_symbol(endvType)
@@ -829,10 +827,10 @@ if __name__=='__main__':
         ast = parser.parse(f.read(), args.filename)
     sts = symtab_store(ast)
     
-    sts.show(ast)
-    ast.show()
+    # sts.show(ast)
+    # ast.show()
 
     block = genTACs(ast, sts)   # 现在没有输出了
 
-    print('RESULT')
-    print(asm_ctrl.gen_code_text())
+    asm_code_text = asm_ctrl.gen_code_text()
+    print(asm_code_text)

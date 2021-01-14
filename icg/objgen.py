@@ -17,7 +17,12 @@ class ASM_Line():
         for arg in self.args:
             content += arg + ', '
         content = content[:-2]
-        return '\t'+ content.strip()
+        content = content.strip()
+        if not self.op in [
+            '.section', '.data', '.text', '.global', '.globl'
+                ]:
+            content = '\t' + content
+        return content
     def __repr__(self):
         return str(self)
 
@@ -146,7 +151,6 @@ class ASM_Module():
 
     def export_as_func(self):
         for var, wait_list in self.local_val_mgr.waits.values():
-            # print(var, wait_list)
             for code in wait_list:
                 if code.op=='addi':
                     code.op = 'la'
@@ -303,7 +307,9 @@ class ASM_Module():
             '!=0': 'snez',
             '*': 'mul',            # 对乘除法还没仔细做，这里是暂时处理
             '/': 'div',
+            '/u': 'divu',
             '%': 'rem',
+            '%%u': 'remu',
         }
         t_op = op_cast.get(op)
         if t_op is None:
@@ -346,7 +352,7 @@ class ASM_Module():
                     next_code = ASM_Line(t_op, 't3', 't1')
                 asm_lines.append(next_code)
             else:
-                t_arg2 = tac.args[1]                
+                t_arg2 = tac.args[1]
                 if t_arg2.isConst:
                     next_code = ASM_Line(t_op, 't3', 't1', str(t_arg2.val))
                     asm_lines.append(next_code)
@@ -402,7 +408,16 @@ class ASM_Module():
                 last_code = new_code[-1]
                 if last_code.op=='mv' and this_code.op=='mv' and (last_code.args==this_code.args or
                         (last_code.args[0], last_code.args[1])==(this_code.args[1], this_code.args[0])):
-                    pass # 已经mv a,b 那么mv a,b 和mv b, a可删去
+                    pass # 已经mv a,b 那么mv a,b 和mv b,a可删去
+                elif last_code.op=='mv' and this_code.op=='mv' and last_code.args[0]==this_code.args[1]:
+                    new_code.append(ASM_Line('mv', this_code.args[0], last_code.args[1]))
+                    # 已经mv a,b 那么mv c,a 可化为mv c,b
+                elif last_code.op=='mv' and (this_code.op in [
+                            'lw', 'add', 'addi', 'sub', 'slt', 'sltu',
+                            'slti', 'sltiu', 'seqz', 'snez'
+                        ]) and last_code.args[0]==this_code.args[0]: 
+                    new_code.pop()     # mv到的这个寄存器又立刻成为修改寄存器操作的目标寄存器，删去上个mv
+                    new_code.append(this_code)
                 else:
                     new_code.append(this_code)
             else:
@@ -481,9 +496,6 @@ class ASM_Module():
     @staticmethod
     def gen_func_body(block, symbols):
         asm = ASM_Module('func_body', symbols)
-        # print('FUNC_BODY ASM MODULE')
-        # print(symbols)
-        # print(block)
         tac_list = block.TACs
         tac_list.reverse()
         first_tac = tac_list.pop()
@@ -493,7 +505,6 @@ class ASM_Module():
         preparing_func_call = False
         func_param_list = []
         for tac in reversed(tac_list):
-            print(tac)
             if tac.op=='param' or tac.op=='call':
                 preparing_func_call = True
             if preparing_func_call:
@@ -537,7 +548,7 @@ class ASM_CTRL():
         func_asm.pick_up_lw()
         func_asm.clear_sw()
         func_asm.del_mv()
-        print(func_asm)
+        # print(func_asm)
         self.funcDefs.append(func_asm.export_as_func())
 
     def gen_gvar_init(self, block):        
@@ -560,13 +571,7 @@ class ASM_CTRL():
         for symbol in all_symbols:
             if not symbol.name.startswith('{'):
                 global_symbols[symbol.name] = symbol
-        '''
-        print(global_symbols)
-        for func_def in self.funcDefs:
-            for code in func_def:
-                print(code)
-        print(self.gvars)
-        '''
+
         code_text = []
         for symbol_name in global_symbols:
             code_text.append(ASM_Line('.global', symbol_name))
