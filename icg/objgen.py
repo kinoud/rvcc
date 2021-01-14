@@ -1,6 +1,6 @@
 from collections import deque
 
-from symbol import ArrayType, StructType
+from symbol import PtrType, ArrayType, StructType
 
 ASM_AUTO_LABEL_CNT = 0
 
@@ -229,6 +229,38 @@ class ASM_Module():
             asm_lines.append(next_code)
             next_code = self.local_val_mgr.sw(dest, 't3')
             asm_lines.append(next_code)
+            return asm_lines
+        elif op=='&':     # 目前看来只有取结构体变量的地址会用到
+            dest = tac.dest
+            arg = tac.args[0]
+            assert(not arg.isConst)
+            next_code = self.local_val_mgr.lw(arg, 't1')
+            asm_lines.append(next_code)
+            next_code = ASM_Line('mv', 't3', 't1')
+            asm_lines.append(next_code)
+            next_code = self.local_val_mgr.sw(dest, 't3')
+            asm_lines.append(next_code)
+            return asm_lines
+        elif op=='offset':
+            field_name = tac.args[1].name
+            if not isinstance(tac.args[0].type, PtrType):
+                print('TAC code Error')
+            elif not isinstance(tac.args[0].type.target_type, StructType):
+                print('TAC code Error')
+            else:
+                offset_dict = tac.args[0].type.target_type.member_offsets
+                field_offset = offset_dict.get(field_name)
+                if field_offset is None:
+                    print('Error: illegal struct field.')
+                else:
+                    dest = tac.dest
+                    arg = tac.args[0]
+                    next_code = self.local_val_mgr.lw(arg, 't1')
+                    asm_lines.append(next_code)
+                    next_code = ASM_Line('addi', 't3', 't1', str(field_offset))
+                    asm_lines.append(next_code)
+                    next_code = self.local_val_mgr.sw(dest, 't3')
+                    asm_lines.append(next_code)
             return asm_lines
 
         op_cast = {

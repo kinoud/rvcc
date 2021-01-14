@@ -17,9 +17,12 @@ class Type(object):
 class StructType(Type):
     def __init__(self, name, member_types:dict):
         sz = 0
-        for t in member_types.values():
+        self.member_offsets = {}
+        for k, t in member_types.items():
+            self.member_offsets[k] = sz
             sz += t.size
         self.member_types = member_types
+
         super().__init__(name, sz)
     
     def gen_symbol(self, name):
