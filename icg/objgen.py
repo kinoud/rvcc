@@ -1,5 +1,7 @@
 from collections import deque
 
+from symbol import ArrayType, StructType
+
 ASM_AUTO_LABEL_CNT = 0
 
 class ASM_Line():
@@ -67,6 +69,8 @@ class ASM_VAR_MGR():
         else:
             code = ASM_Line('lw', rt, 'fp', '0')
             self.waits[var.name][1].append(code)
+        if isinstance(var.type, ArrayType) or isinstance(var.type, StructType):   # 转而取指针
+            code.op = 'addi'
         return code
 
     def sw(self, var, rt):       # 一般用t3保存dest的值
@@ -150,7 +154,22 @@ class ASM_Module():
     def normal_tac_handler(self, tac):
         asm_lines = []
         op = tac.op
-        op_cast = { '=': 'mv',
+        if op=='=':       # '='号单独考虑
+            dest = tac.dest
+            arg = tac.args[0]
+            if arg.isConst:
+                next_code = ASM_Line('li', 't1', str(arg.val))
+                asm_lines.append(next_code)
+            else:
+                next_code = self.local_val_mgr.lw(arg, 't1')
+                asm_lines.append(next_code)
+            next_code = ASM_Line('mv', 't3', 't1')
+            asm_lines.append(next_code)
+            next_code = self.local_val_mgr.sw(dest, 't3')
+            asm_lines.append(next_code)
+            return asm_lines
+
+        op_cast = {
             '+': 'add',
             '+i':'addi',
             '-': 'sub',
@@ -166,8 +185,22 @@ class ASM_Module():
         }
         t_op = op_cast.get(op)
         if t_op is None:
-            print('op not found')
-        else:
+            if op=='set':
+                dest = tac.dest
+                arg = tac.args[0]
+                if arg.isConst:
+                    next_code = ASM_Line('li', 't3', str(arg.val))
+                    asm_lines.append(next_code)
+                else:
+                    next_code = self.local_val_mgr.lw(arg, 't3')
+                    asm_lines.append(next_code)
+                next_code = self.local_val_mgr.lw(dest, 't1')
+                asm_lines.append(next_code)
+                next_code = ASM_Line('sw', 't3', 't1', '0')
+                asm_lines.append(next_code)
+            else:
+                print('op not found')
+        else:                                 # 进入这个分支前提是有参数1，并且不是立即数
             t_arg1 = tac.args[0]
             next_code = self.local_val_mgr.lw(t_arg1, 't1')
             asm_lines.append(next_code)
