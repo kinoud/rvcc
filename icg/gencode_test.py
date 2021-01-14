@@ -254,8 +254,8 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             (newBlock, _, _) = dfs(v)
             block = Tblock(block, newBlock)
 
-        lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
-        block = simple_opt(block, lt)
+        # lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
+        # block = simple_opt(block, lt)
         # TODO
 
         return (block, None, None)
@@ -279,6 +279,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
 
         # 接下来对这个整体的FuncDef的TAC作地址化，不包括参数和返回值等函数头相关处理
         block = taccpx.to_taccpx(block, renamed_symbols)
+        # 生成该函数的汇编代码，其中全局变量待填
         asm_ctrl.gen_func(block, renamed_symbols, sts.get_symtab_of(u).get_symbol(u.decl.name))
 
         return (block, None, None)
@@ -294,7 +295,9 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             block = Tblock(block, rblock)
             block.appendTAC(newTAC)
 
-        # print(block)
+        print('DEcl')
+        print(block)
+
         return (block, None, None)
 
     @register('Return')
@@ -586,28 +589,45 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             if resType == 'pvar':
                 return (block, res, 'tmp')
             elif resType!='var':
-                print('Not lvalue!')
+                print('Error: not lvalue!')
                 return (block, None, None)
         elif u.op=='++' or u.op=='p++' or u.op=='--' or u.op=='p--':
-            if resType!='var':
-                print('Not lvalue!')
+            if resType!='pvar' and resType!='var':
+                print('Error: not lvalue!')
                 return (block, None, None)
             if isinstance(res.type, BasicType):
                 newTmp = current_symtab.gen_tmp_basic_symbol(res.type)
+                inc_val = 1
             elif isinstance(res.type, PtrType):
                 newTmp = current_symtab.gen_tmp_ptr_symbol(res.type)
+                inc_val = res.type.target_type.size
             else:
                 print('Error: this type of symbol cannot apply ++/--.')
                 return (block, None, None)
             newOp = ''+u.op[1]
-            if u.op[0]=='p':
+            if resType=='pvar':
+                if u.op[0]=='p':
+                    tac_1 = TAC('get', newTmp, res)
+                    tmp_another = current_symtab.gen_tmp_basic_symbol(res.type) if isinstance(res.type,
+                            BasicType) else current_symtab.gen_tmp_ptr_symbol(res.type)
+                    tac_2 = TAC(newOp, tmp_another, newTmp, genSimpleConst(str(inc_val), BasicType('int')))
+                    tac_3 = TAC('set', res, tmp_another)
+                    block.appendTAC(tac_1, tac_2, tac_3)
+                    return (block, newTmp, 'tmp')
+                else:
+                    tac_1 = TAC('get', newTmp, res)
+                    tac_2 = TAC(newOp, newTmp, newTmp, genSimpleConst(str(inc_val), BasicType('int')))
+                    tac_3 = TAC('set', res, newTmp)
+                    block.appendTAC(tac_1, tac_2, tac_3)
+                    return (block, newTmp, 'tmp')
+            elif u.op[0]=='p': # resType=='var'
                 tac_1 = TAC('=', newTmp, res)
-                tac_2 = TAC(newOp, res, res, genSimpleConst('1', res.type))
+                tac_2 = TAC(newOp, res, res, genSimpleConst(str(inc_val), BasicType('int')))
                 block.appendTAC(tac_1)
                 block.appendTAC(tac_2)
                 return (block, newTmp, 'tmp')
             else:             # C标准中即使前置++/--返回的也是右值
-                tac_1 = TAC(newOp, res, res, genSimpleConst('1', res.type))
+                tac_1 = TAC(newOp, res, res, genSimpleConst(str(inc_val), BasicType('int')))
                 tac_2 = TAC('=', newTmp, res)
                 block.appendTAC(tac_1)
                 block.appendTAC(tac_2)
