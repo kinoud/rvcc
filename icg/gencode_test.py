@@ -288,7 +288,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         block = Tblock()
         if u.init is not None:
             # 目前只考虑了简单变量
-            (rblock, rtmp, _) = dfs(u.init)
+            (rblock, rtmp, _) = lval_to_rval(*dfs(u.init))
             u_sym = sts.get_symtab_of(u).get_symbol(u.name)
             newTAC = TAC("=", u_sym, rtmp)
             block = Tblock(block, rblock)
