@@ -156,6 +156,8 @@ class ASM_Module():
             '-': 'sub',
             '<': 'slt',
             '<u': 'sltu',
+            '<i': 'slti',
+            '<iu': 'sltiu',
             '==0': 'seqz',
             '!=0': 'snez',
             '*': 'mul',            # 对乘除法还没仔细做，这里是暂时处理
@@ -166,8 +168,6 @@ class ASM_Module():
         if t_op is None:
             print('op not found')
         else:
-            if op=='<' or op=='<u':    # 处理这里可能的有常数的情况——呃似乎处理不了
-                print('unable')
             t_arg1 = tac.args[0]
             next_code = self.local_val_mgr.lw(t_arg1, 't1')
             asm_lines.append(next_code)

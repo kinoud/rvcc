@@ -181,10 +181,17 @@ def sym_address_handler(block):
                     newBlock.appendTAC(*sub_cast_handler(tac))
         elif tac.op=='<':               # <u 为无符号比较，  其他比较都转化为小于比较
             assert(len(tac.args)==2)
+            if tac.args[0].isConst:       # 常数在左边的场合，两边移位到等号另一边
+                tmp = stab.get_tmp(tac.args[1].type)
+                tac_neg = TAC('-', tmp, tac.args[1])
+                newBlock.appendTAC(*assign_cast_handler(tac_neg))
+                tac = TAC('<', tac.dest, tmp, genSimpleConst(str(-tac.args[0].val), tac.args[0].type))
+            if tac.args[1].isConst:
+                tac.op += 'i'
             if (not tac.args[0].type.name.startswith('unsigned')) and (not tac.args[1].type.name.startswith('unsigned')):
-                newBlock.appendTAC(TAC('<', tac.dest, *tac.args))
+                newBlock.appendTAC(TAC(tac.op, tac.dest, *tac.args))
             else:              #  指针比较也是无符号的
-                newBlock.appendTAC(TAC('<u', tac.dest, *tac.args))
+                newBlock.appendTAC(TAC(tac.op+'u', tac.dest, *tac.args))
         elif tac.op=='>':
             assert(len(tac.args)==2)
             new_tac = TAC('<', tac.dest, tac.args[1], tac.args[0])
