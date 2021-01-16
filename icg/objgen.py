@@ -545,6 +545,7 @@ class ASM_Module():
 class ASM_CTRL():
     def __init__(self):
         self.funcDefs = []
+        self.hasDef = {}
         self.gvars = {}
         self.result = []
 
@@ -556,8 +557,9 @@ class ASM_CTRL():
         func_asm.del_mv()
         # print(func_asm)
         self.funcDefs.append(func_asm.export_as_func())
+        self.hasDef[func_decl.name] = True
 
-    def gen_gvar_init(self, block):        
+    def gen_gvar_init(self, block):
         if len(block.TACs)==0:
             return
         if len(block.TACs)>1:
@@ -576,7 +578,8 @@ class ASM_CTRL():
         global_symbols = {}
         for symbol in all_symbols:
             if not symbol.name.startswith('{'):
-                global_symbols[symbol.name] = symbol
+                if not(isinstance(symbol, FuncSymbol)) or symbol.name in self.hasDef:
+                    global_symbols[symbol.name] = symbol
 
         code_text = []
         for symbol_name in global_symbols:
