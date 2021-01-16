@@ -306,13 +306,10 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     def Compound(u):
         block = Tblock()
         nodes = u.block_items
-        for node in nodes:
-            (newBlock, _, _) = dfs(node)
-            block = Tblock(block, newBlock)
-        # TODO
-        # lt = LocalVarTable.genLocalVarTable(sts.get_symtab_of(u), block)
-        # block = simple_opt(block, lt)
-        # TODO
+        if nodes is not None:
+            for node in nodes:
+                (newBlock, _, _) = dfs(node)
+                block = Tblock(block, newBlock)
         return (block, None, None)
 
     @register('EmptyStatement')
