@@ -7,7 +7,7 @@ from .symtab import symtab_store, SymTab
 from .symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
 from .tac import TAC, TAC_block as Tblock
 import icg.taccpx as taccpx
-from .taccpx import LocalVarTable, simple_opt
+from .taccpx import LocalVarTable, simple_opt, label_clear_opt
 from .objgen import asm_ctrl
 
 class LoopOpSet:
@@ -267,6 +267,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             tac.dest = GotoSymbol(func_end)
         funcRetMgr.exitFunc()
 
+        block = label_clear_opt(block)
         # 接下来对这个整体的FuncDef的TAC作地址化，不包括参数和返回值等函数头相关处理
         block = taccpx.to_taccpx(block, renamed_symbols)
         # 生成该函数的汇编代码，其中全局变量待填

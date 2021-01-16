@@ -108,6 +108,39 @@ def simple_opt(tblock, ltable):
     return res_block
     '''
 
+def label_adjdec(block):   # 去除跳转到自己下一句的情况
+    new_block = Tblock()
+    next = None
+    for tac in block.TACs:
+        if next is tac and (tac.op=='label' or tac.op=='ret'):
+            new_block.TACs.pop()
+        elif tac.op=='goto' or tac.op=='ifz':
+            next = tac.dest.tgt
+            new_block.appendTAC(tac)
+        else:
+            next = None
+            new_block.appendTAC(tac)
+    return new_block
+
+
+def label_clear_opt(block):
+    new_block = Tblock()
+    length = len(block.TACs)
+    replace_dict = {}
+    for i in range(length-1):
+        if block.TACs[i].op=='label' and (block.TACs[i+1].op=='label' or block.TACs[i+1].op=='ret'):
+            replace_dict[block.TACs[i]] = block.TACs[i+1]
+    for tac in block.TACs:
+        if tac.op=='goto' or tac.op=='ifz':
+            tgt = tac.dest.tgt
+            if tgt in replace_dict:
+                tac.dest.tgt = replace_dict[tgt]
+        if tac.op=='label' and tac in replace_dict:
+            pass # delete this tac
+        else:
+            new_block.appendTAC(tac)
+    return label_adjdec(new_block)
+
 class SymbolTable(object):
     def __init__(self, syms:list):
         self.syms = syms
