@@ -413,40 +413,44 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         struct类型变量原地拷贝，然后传指针
         '''
         (funcNameBlock, funcNameVal, _) = dfs(u.name)
-        argList = u.args.exprs # u.args是ExprList, 但是要用特殊办法展开
-        paramList = []
-        argBlock = Tblock()
-        for arg in reversed(argList):
-            (thisBlock, thisEndv, thisType) = dfs(arg)
+        if u.args is None:
+            paramList = []
+            argBlock = Tblock()
+        else:
+            argList = u.args.exprs # u.args是ExprList, 但是要用特殊办法展开
+            paramList = []
+            argBlock = Tblock()
+            for arg in reversed(argList):
+                (thisBlock, thisEndv, thisType) = dfs(arg)
 
-            if thisType!='pvar':
-                argBlock = Tblock(argBlock, thisBlock)
-                paramList.append(thisEndv)
-            else:
-                assert(isinstance(thisEndv, PtrSymbol))
-                if isinstance(thisEndv.type.target_type, BasicType):
-                    (thisBlock, thisEndv, _) = lval_to_rval(thisBlock, thisEndv, thisType)
+                if thisType!='pvar':
                     argBlock = Tblock(argBlock, thisBlock)
                     paramList.append(thisEndv)
-                elif isinstance(thisEndv.type.target_type, ArrayType):
-                    ''' 这里还是暂时考虑隐含类型转换
-                    castedType = PtrType(thisEndv.type.target_type.ele_type)
-                    newTmp = current_symtab.gen_tmp_ptr_symbol(castedType)
-                    newTAC = TAC('=', newTmp, thisEndv)
-                    argBlock = Tblock(argBlock, thisBlock)
-                    argBlock.appendTAC(newTAC)
-                    paramList.append(newTmp)
-                    ''' 
-                    argBlock = Tblock(argBlock, thisBlock)
-                    paramList.append(thisEndv)
-                elif isinstance(thisEndv.type.target_type, StructType):
-                    (thisEndv, copyBlock) = struct_copy(thisEndv)
-                    thisBlock = Tblock(thisBlock, copyBlock)
-                    argBlock = Tblock(argBlock, thisBlock)
-                    paramList.append(thisEndv)
-                else: # 暂时没想到其他允许的参数形式
-                    print("Error: Illegal param.")
-                    return (Tblock(), None, None)
+                else:
+                    assert(isinstance(thisEndv, PtrSymbol))
+                    if isinstance(thisEndv.type.target_type, BasicType):
+                        (thisBlock, thisEndv, _) = lval_to_rval(thisBlock, thisEndv, thisType)
+                        argBlock = Tblock(argBlock, thisBlock)
+                        paramList.append(thisEndv)
+                    elif isinstance(thisEndv.type.target_type, ArrayType):
+                        ''' 这里还是暂时考虑隐含类型转换
+                        castedType = PtrType(thisEndv.type.target_type.ele_type)
+                        newTmp = current_symtab.gen_tmp_ptr_symbol(castedType)
+                        newTAC = TAC('=', newTmp, thisEndv)
+                        argBlock = Tblock(argBlock, thisBlock)
+                        argBlock.appendTAC(newTAC)
+                        paramList.append(newTmp)
+                        ''' 
+                        argBlock = Tblock(argBlock, thisBlock)
+                        paramList.append(thisEndv)
+                    elif isinstance(thisEndv.type.target_type, StructType):
+                        (thisEndv, copyBlock) = struct_copy(thisEndv)
+                        thisBlock = Tblock(thisBlock, copyBlock)
+                        argBlock = Tblock(argBlock, thisBlock)
+                        paramList.append(thisEndv)
+                    else: # 暂时没想到其他允许的参数形式
+                        print("Error: Illegal param.")
+                        return (Tblock(), None, None)
 
         block = Tblock(funcNameBlock, argBlock)
 

@@ -108,7 +108,7 @@ def simple_opt(tblock, ltable):
     return res_block
     '''
 
-def label_adjdec(block):   # 去除跳转到自己下一句的情况
+def label_adjdec(block):   # 去除跳转到自己下一句的情况，主要针对简单函数的return
     new_block = Tblock()
     next = None
     for tac in block.TACs:
@@ -121,7 +121,6 @@ def label_adjdec(block):   # 去除跳转到自己下一句的情况
             next = None
             new_block.appendTAC(tac)
     return new_block
-
 
 def label_clear_opt(block):
     new_block = Tblock()
