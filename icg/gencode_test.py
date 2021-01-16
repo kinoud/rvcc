@@ -315,6 +315,10 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
         # TODO
         return (block, None, None)
 
+    @register('EmptyStatement')
+    def EmptyStatement(u):
+        return (Tblock(), None, None)
+
     @register('ExprList')
     def ExprList(u):
         block = Tblock()
