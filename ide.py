@@ -54,6 +54,7 @@ class AssemblePage(QWidget):
     self.btnAsm = QPushButton('Assemble')
     self.btnSaveAll = QPushButton('Save All')
     self.btnSaveOutput = QPushButton('Save to File')
+    self.btnClose = QPushButton('Close')
 
     self.cpCoe = QWidget()
     layout = QHBoxLayout()
@@ -61,6 +62,7 @@ class AssemblePage(QWidget):
     layout.addWidget(self.btnAddAsmFile)
     layout.addWidget(self.btnSaveAll)
     layout.addWidget(self.btnAsm)
+    layout.addWidget(self.btnClose)
     self.cpCoe.setLayout(layout)
 
 
@@ -92,12 +94,17 @@ class AssemblePage(QWidget):
     self.btnAsm.clicked.connect(self.btnAsm_clicked)
     self.btnSaveAll.clicked.connect(self.btnSaveAll_clicked)
     self.btnSaveOutput.clicked.connect(self.btnSaveOutput_clicked)
+    self.btnClose.clicked.connect(self.btnClose_clicked)
   
   def btnSaveOutput_clicked(self):
     fileName,fileType = QtWidgets.QFileDialog.getSaveFileName(self, "保存文件", os.getcwd(), 
     "Text Files(*.coe);;All Files(*)")
     with open(fileName, 'w') as f:
       f.write(self.textOutput.toPlainText())
+  
+  def btnClose_clicked(self):
+    self.panelAsm.removeCurrent()
+
 
   def btnAsm_clicked(self):
     self.btnSaveAll_clicked()
@@ -254,6 +261,14 @@ class AssemblePanel(QTabWidget):
     new_tab.outter_hooks.append(lambda:self.setTabText(self.indexOf(new_tab),new_tab.getTitle()))
     self.file_name_list.append(fileName)
     self.tabs.append(new_tab)
+  
+  def removeCurrent(self):
+    if self.currentIndex() == -1:
+      return
+    self.file_name_list.pop(self.currentIndex())
+    self.tabs.pop(self.currentIndex())
+    self.removeTab(self.currentIndex())
+    print(self.file_name_list)
 
 class MyWindow(QMainWindow):
 
