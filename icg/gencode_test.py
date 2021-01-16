@@ -119,7 +119,7 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             # current_tvlist = Tvlist(current_tvlist)
             past_symtab = current_symtab
             current_symtab = sts.get_symtab_of(u)
-            (block, endv, endtype) = dfs_fn(u)
+            res = (block, endv, endtype) = dfs_fn(u)
             
             # rename begin
             
@@ -138,13 +138,13 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
             # current_tvlist = past_tvlist
 
         else:
-            (block, endv, endtype) = dfs_fn(u)
+            res = dfs_fn(u)
 
         
         if class_name=='FileAST':
             asm_ctrl.gen_total(renamed_symbols)
 
-        return (block, endv, endtype)
+        return res
     
     _rename_block_id = 0
     def rename_init(t:SymTab) -> dict:
@@ -834,9 +834,6 @@ if __name__=='__main__':
         ast = parser.parse(f.read(), args.filename)
     sts = symtab_store(ast)
     
-    # sts.show(ast)
-    # ast.show()
-
     block = genTACs(ast, sts)   # 现在没有输出了
 
     asm_code_text = asm_ctrl.gen_code_text()

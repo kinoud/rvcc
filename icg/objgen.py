@@ -592,7 +592,7 @@ class ASM_CTRL():
             code_data.append(ASM_Line('label', symbol_name))
             value = self.gvars.get(symbol_name)
             if value is None:
-                code_data.append(ASM_Line('.zero', str(global_symbols[symbol_name].size//4)))
+                code_data.append(ASM_Line('.zero', str(global_symbols[symbol_name].size))) # 分配若干字节空间（初始化为0未必已实现）
             else:
                 code_data.append(ASM_Line('.word', str(value)))
 
