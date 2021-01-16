@@ -1,6 +1,6 @@
 from collections import deque
 
-from symbol import PtrType, ArrayType, StructType, FuncSymbol
+from .symbol import PtrType, ArrayType, StructType, FuncSymbol
 
 ASM_AUTO_LABEL_CNT = 0
 

@@ -1,8 +1,8 @@
 from pycparser import c_ast
 from pycparser import CParser
 
-from symbol import *
-from symbol import ArrayType
+from .symbol import *
+from .symbol import ArrayType
 import argparse
 
 class SymTab():

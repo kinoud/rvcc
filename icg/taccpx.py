@@ -1,6 +1,6 @@
-from tac import TAC, TAC_block as Tblock
-from symbol import Type, BasicType, PtrType, ArrayType
-from symconst import genSimpleConst, genType, genConstant
+from .tac import TAC, TAC_block as Tblock
+from .symbol import Type, BasicType, PtrType, ArrayType
+from .symconst import genSimpleConst, genType, genConstant
 
 from collections import deque
 

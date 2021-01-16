@@ -1,6 +1,6 @@
 
-from symbol import Type, BasicType, PtrType, Symbol, BasicSymbol as Bsym
-from symtab import SymTab
+from .symbol import Type, BasicType, PtrType, Symbol, BasicSymbol as Bsym
+from .symtab import SymTab
 
 class VirtualType(Type):
     def __init__(self, name):
