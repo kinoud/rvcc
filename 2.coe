@@ -1,0 +1,38 @@
+Text Segment Size: 64 byte(s)
+Data Segment Size: 0 byte(s)
+[1m[91mError:10: Invalid or incomplete token found '$28'[0m
+[93mWarning:2:Immediate not 2 bytes aligned. Last bit willbe dropped.[0m
+[93mWarning:3:Immediate not 2 bytes aligned. Last bit willbe dropped.[0m
+[1m[91mError:10: Invalid or incomplete token found '$28'[0m
+memory_initialization_radix=16;
+memory_initialization_vector=fe24
+2e23
+fe20
+ac23
+ffc1
+0413
+ff01
+0113
+0010
+0313
+0023
+0e13
+000e
+0313
+0ea0
+0393
+0000
+0313
+0003
+0e13
+0003
+0513
+0101
+0113
+ffc1
+2403
+ff81
+2083
+0000
+8067
+

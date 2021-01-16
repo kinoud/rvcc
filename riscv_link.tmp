@@ -4,7 +4,10 @@ main:
 	addi  	$8, $2, -4
 	addi  	$2, $2, -16
 	addi  	$6, $0, 1
-	addi  	$28, $6, 0
+	addi  	$28, $6, 2
+	addi  	$6, $28, 0
+	addi  	$7, $0, 234
+	mul  	$28, $6, $7
 	addi  	$6, $0, 0
 	addi  	$28, $6, 0
 	addi  	$10, $6, 0

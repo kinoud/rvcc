@@ -91,6 +91,13 @@ class AssemblePage(QWidget):
     self.btnAddAsmFile.clicked.connect(self.btnAddAsmFile_clicked)
     self.btnAsm.clicked.connect(self.btnAsm_clicked)
     self.btnSaveAll.clicked.connect(self.btnSaveAll_clicked)
+    self.btnSaveOutput.clicked.connect(self.btnSaveOutput_clicked)
+  
+  def btnSaveOutput_clicked(self):
+    fileName,fileType = QtWidgets.QFileDialog.getSaveFileName(self, "保存文件", os.getcwd(), 
+    "Text Files(*.coe);;All Files(*)")
+    with open(fileName, 'w') as f:
+      f.write(self.textOutput.toPlainText())
 
   def btnAsm_clicked(self):
     self.btnSaveAll_clicked()
@@ -106,7 +113,7 @@ class AssemblePage(QWidget):
 
   def btnAddAsmFile_clicked(self):
     fileName,fileType = QtWidgets.QFileDialog.getOpenFileName(self, "选取文件", os.getcwd(), 
-    "All Files(*);;Text Files(*.txt)")
+    "Text Files(*.asm);;All Files(*)")
     print(fileName)
     print(fileType)
     if fileName!='':
@@ -118,6 +125,7 @@ class CompilerPage(QWidget):
     self.textSrc = QTextEdit()
     self.textAsm = QTextEdit()
     self.fileName = 'untitled.c'
+    self.isNew = True
     self.labelFile = QLabel(self.fileName)
     self.btnCompile=QPushButton('Complie')
     self.btnOpenFile=QPushButton('Open')
@@ -161,6 +169,13 @@ class CompilerPage(QWidget):
     self.btnOpenFile.clicked.connect(self.btnOpenFile_clicked)
     self.btnSaveFile.clicked.connect(self.btnSaveFile_clicked)
     self.textSrc.textChanged.connect(self.textSrc_change)
+    self.btnSaveOutput.clicked.connect(self.btnSaveOutput_clicked)
+  
+  def btnSaveOutput_clicked(self):
+    fileName,fileType = QtWidgets.QFileDialog.getSaveFileName(self, "保存文件", os.getcwd(), 
+    "Text Files(*.asm);;All Files(*)")
+    with open(fileName, 'w') as f:
+      f.write(self.textAsm.toPlainText())
 
   def textSrc_change(self):
     self.labelFile.setText(os.path.basename(self.fileName)+' *')
@@ -174,6 +189,7 @@ class CompilerPage(QWidget):
     "C Source Files(*.c);;All Files(*)")
     print(fileName)
     print(fileType)
+    self.isNew = False
     if fileName=='':
       return
     
@@ -183,8 +199,12 @@ class CompilerPage(QWidget):
     self.labelFile.setText(os.path.basename(fileName))
 
   def btnSaveFile_clicked(self):
+    if self.isNew:
+      self.fileName,_ = QtWidgets.QFileDialog.getSaveFileName(self, "保存文件", os.getcwd(), 
+    "C Source Files(*.c);;All Files(*)")
     with open(self.fileName,'w') as f:
       f.write(self.textSrc.toPlainText())
+    self.isNew = False
     self.labelFile.setText(os.path.basename(self.fileName))
 
 
