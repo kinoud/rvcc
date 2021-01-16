@@ -9,7 +9,7 @@ default_text_start = '0'
 default_data_start = '4000'
 default_outfile = 'risv_default.coe'
 
-def ide_main(filename_list, text_start=default_text_start, data_start=default_data_start, outfile=default_outfile):
+def ide_main(filename_list, text_start=default_text_start, data_start=default_data_start, outfile='**memory**'):
     text_start = int(text_start)
     data_start = int(data_start)
 
@@ -83,6 +83,10 @@ def main_process(files, data_start, text_start, args):
         x = int(line, 2)
         tot = hex(x)[2:].zfill(8)
         outstr += tot[0:4] + '\n' + tot[4:8] + '\n'
+    
+    if outfile == '**memory**':
+        print(outstr)
+        return
 
     fout = None
     try:
