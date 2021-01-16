@@ -13,6 +13,8 @@ def get_arguments():
     ap.add_argument("INFILEs", nargs='+', help="Input files containing assembly code.")
     ap.add_argument('-o', "--outfile",
                     help="Output file name.", default = 'risv_default.coe')
+    ap.add_argument('-e', "--enter-asm",
+                    help="Enter asm file.", default = 'start.asm')
     ap.add_argument('-t', "--text-start",
                     help="Address where code text segment start.", default = '0')
     ap.add_argument('-d', "--data-start",
@@ -25,6 +27,8 @@ def main():
     args = get_arguments()
     infiles = args.INFILEs
     files = []
+    file_unit = gen_segments_from_infile(vars(args)['enter_asm'])
+    files.append(file_unit)
     for infile in infiles:
         file_unit = gen_segments_from_infile(infile)
         files.append(file_unit)
