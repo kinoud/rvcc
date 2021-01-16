@@ -2,13 +2,13 @@ from pycparser import c_ast
 from pycparser import CParser
 import argparse
 
-from symbol import Type, Symbol, BasicType, PtrType, StructType, ArrayType, FuncType, BasicSymbol, PtrSymbol, StructSymbol, ArraySymbol
-from symtab import symtab_store, SymTab
-from symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
-from tac import TAC, TAC_block as Tblock
-import taccpx
-from taccpx import LocalVarTable, simple_opt
-from objgen import asm_ctrl
+from .symbol import Type, Symbol, BasicType, PtrType, StructType, ArrayType, FuncType, BasicSymbol, PtrSymbol, StructSymbol, ArraySymbol
+from .symtab import symtab_store, SymTab
+from .symconst import LabelSymbol, GotoSymbol, FakeSymbol, genSimpleConst, genType, genConstant
+from .tac import TAC, TAC_block as Tblock
+import icg.taccpx as taccpx
+from .taccpx import LocalVarTable, simple_opt
+from .objgen import asm_ctrl
 
 class LoopOpSet:
     def __init__(self):
@@ -815,6 +815,13 @@ def genTACs(ast:c_ast.Node, sts) -> Tblock:
     block, _, _ = dfs(ast)
     return block
 
+def gen_code(src:str):
+    parser = CParser()
+    ast = parser.parse(src,'')
+    sts = symtab_store(ast)
+    block = genTACs(ast, sts)   # 现在没有输出了
+    asm_code_text = asm_ctrl.gen_code_text()
+    print(asm_code_text)
 
 if __name__=='__main__':
     
