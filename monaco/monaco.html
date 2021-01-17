@@ -1,0 +1,41 @@
+<!Doctype html>
+<html>
+    <head><meta encoding="UTF-8"><title>Monaco editor</title></head>
+    <script>
+        window.pathLib = "./lib/";
+        window.pathSelfLib = "./";
+        
+        var originalConsoleWarn = console.warn;
+        console.warn = function (message) {
+          if (message.startsWith('Duplicate definition of module')) return;
+          originalConsoleWarn.apply(console, arguments);
+        };
+      </script>
+      
+      <script src="./jquery.min.js"></script>
+      <!-- Load monaco-editor -->
+      <script src="./lib/monaco-editor/0.21.2/min/vs/loader.js"></script>
+      
+      <script src="./monaco-editor.js"></script>
+      <link rel="stylesheet" href="./monaco-editor.css">
+    <body>
+            <div id="editor" class="editor" style="border: 1px solid #D4D4D5; height: 100%;  " >
+              加载中...
+            </div>
+            <script type="text/javascript">
+              var originalData = '';
+              var originalC = 'c';
+              window.onEditorLoaded(function () {
+                var editor;
+                window.editor = editor = window.createCodeEditor(document.getElementById("editor"), originalC, originalData);
+              
+              });
+              function getValue(){
+                  return editor.getValue();
+              }
+              function setValue(a){
+                  return editor.setValue(a);
+              }
+              </script>
+    </body>
+</html>
