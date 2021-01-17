@@ -1,19 +1,28 @@
-from PyQt5.QtCore import QDir
-from PyQt5.QtGui import QIcon,QPixmap,QFont
-from PyQt5.QtCore import  QDate
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import *
 import PyQt5.QtWidgets as QtWidgets
 import sys,os
 from io import StringIO 
+from PyQt5 import QtCore
 from multiprocessing import Process, Queue
 import icg.gencode_test as codegen
 sys.path.append(os.path.join(os.getcwd(), 'asm'))
-
 import asm as asm
+import json
+from PyQt5.QtCore import QTimer
+
+from PyQt5.QtWebEngineWidgets import *
 
 import signal
 
+from pycparser.c_lexer import CLexer
 
+def _lex_error_func(msg, line, column):
+  return
+  raise ParseError("%s:%s: %s" % (msg, line, column))
+
+clex = CLexer(_lex_error_func, lambda:None, lambda:None, lambda _:False)
+clex.build(optimize=True)
 
 def sub_proc(fn, q, args):
     def myexit(signum, frame):
@@ -99,6 +108,8 @@ class AssemblePage(QWidget):
   def btnSaveOutput_clicked(self):
     fileName,fileType = QtWidgets.QFileDialog.getSaveFileName(self, "保存文件", os.getcwd(), 
     "Text Files(*.coe);;All Files(*)")
+    if fileName == '':
+      return 
     with open(fileName, 'w') as f:
       f.write(self.textOutput.toPlainText())
   
@@ -126,10 +137,73 @@ class AssemblePage(QWidget):
     if fileName!='':
       self.panelAsm.addTabOfFile(fileName)
     # self.panelAsm.addTab(AssembleTab(fileName),os.path.basename(fileName))
+
+COLOR_TYPE = '#FF9999'
+COLOR_KEYWORD = '#996699'
+COLOR_ID = '#0099CC'
+COLOR_NUMBER = '#FF6666'
+COLOR_COMMENT = '#99CC66'
+
+color_dict = {
+  'BREAK':COLOR_KEYWORD,
+  'CHAR':COLOR_TYPE, 
+  'CONST':COLOR_KEYWORD,
+  'CONTINUE':COLOR_KEYWORD, 
+  'DO':COLOR_KEYWORD, 
+  'ELSE':COLOR_KEYWORD, 
+  'FOR':COLOR_KEYWORD, 
+  'IF':COLOR_KEYWORD, 
+  'INT':COLOR_TYPE, 
+  'LONG':COLOR_TYPE,
+  'RETURN':COLOR_KEYWORD, 
+  'SHORT':COLOR_TYPE, 
+  'SIGNED':COLOR_TYPE, 
+  'STRUCT':COLOR_TYPE,
+  'UNSIGNED':COLOR_TYPE, 
+  'VOID':COLOR_TYPE,
+  'WHILE':COLOR_KEYWORD, 
+  'ASM':COLOR_KEYWORD,
+  'COMMENT':COLOR_COMMENT,
+  'INT_CONST_DEC':COLOR_NUMBER,
+  'ID':COLOR_ID
+}
+
+def colored(plain:str, ttype:str) -> str:
+  if color_dict.get(ttype) is None:
+    print(ttype)
+    return plain
+  return '<font color="%s">%s</font>'%(color_dict[ttype],plain)
+
+def colored_html_from_plain(plain:str) -> str:
+  ans = ''
+  lineno = 1
+  pos = 0
+  clex.input(plain)
+  def to_html(s):
+    if s=='\n':
+      return '<br>'
+    if s=='\t':
+      return '  '
+    return s
+  for token in iter(clex.token, None):
+    # print(token.lineno,token.lexpos,token.type,token.value)
+    # print(token)
+    dans = ''
+    while pos < token.lexpos:
+      dans += to_html(plain[pos])
+      pos += 1
+    ans += colored(dans, 'COMMENT')
+    ans += colored(token.value, token.type)
+    pos += len(token.value)
+  return ans
+    
+# colored_html_from_plain('int{a=123;\n}')
+
 class CompilerPage(QWidget):
   def __init__(self,parent=None):
     super(CompilerPage, self).__init__(parent)
     self.textSrc = QTextEdit()
+    self.textColored = QTextEdit()
     self.textAsm = QTextEdit()
     self.fileName = 'untitled.c'
     self.isNew = True
@@ -139,6 +213,8 @@ class CompilerPage(QWidget):
     self.btnSaveFile=QPushButton('Save')
     self.btnSaveOutput=QPushButton('Save Output')
     self.btnAsm=QPushButton('Assemble')
+    self.browser = QWebEngineView()
+    self.browser.setUrl(QtCore.QUrl('file:///' + os.path.abspath('./monaco/monaco.html').replace('\\','/')))
 
     self.cpSrc = QWidget()
     layout = QHBoxLayout()
@@ -154,11 +230,25 @@ class CompilerPage(QWidget):
     layout.addWidget(self.btnSaveOutput)
     self.cpAsm.setLayout(layout)
 
+    self.naiveEditor = QWidget()
+    layout = QVBoxLayout()
+    layout.addWidget(self.textSrc)
+    layout.addWidget(self.textColored)
+    self.naiveEditor.setLayout(layout)
+
+    self.editPanel = QTabWidget()
+    self.editPanel.addTab(self.naiveEditor,'naive')
+    self.editPanel.addTab(self.browser,'senior')
+
     self.sliceSrc = QWidget()
     layout = QVBoxLayout()
     layout.addWidget(self.labelFile)
-    layout.addWidget(self.textSrc)
+    # layout.addWidget(self.browser)
+    # layout.addWidget(self.textSrc)
+    # layout.addWidget(self.textColored)
+    layout.addWidget(self.editPanel)
     layout.addWidget(self.cpSrc)
+    self.layoutSimple = layout
     self.sliceSrc.setLayout(layout)
 
     self.sliceAsm = QWidget()
@@ -177,17 +267,46 @@ class CompilerPage(QWidget):
     self.btnSaveFile.clicked.connect(self.btnSaveFile_clicked)
     self.textSrc.textChanged.connect(self.textSrc_change)
     self.btnSaveOutput.clicked.connect(self.btnSaveOutput_clicked)
+    self.editPanel.currentChanged['int'].connect(self.tabfun)
+    self.isBrowser = False
+    self.timer = QTimer(self) #初始化一个定时器
+    self.timer.timeout.connect(self.operate) #计时结束调用operate()方法
+    self.timer.start(500) #设置计时间隔并启动
+    self.last = self.textSrc.toPlainText()
+  
+  def operate(self):
+    if self.isBrowser:
+      self.browser.page().runJavaScript('''getValue()''', lambda x: self.textSrc.setPlainText(x))
+      
+  def tabfun(self, index):
+    if self.isBrowser:
+      self.browser.page().runJavaScript('''getValue()''', lambda x: self.textSrc.setPlainText(x))
+      self.isBrowser = False
+    else:
+      self.isBrowser = True
+      self.browser.page().runJavaScript('setValue('+ json.dumps( self.textSrc.toPlainText() ) +')')
+
   
   def btnSaveOutput_clicked(self):
     fileName,fileType = QtWidgets.QFileDialog.getSaveFileName(self, "保存文件", os.getcwd(), 
     "Text Files(*.asm);;All Files(*)")
+    if fileName == '':
+      return 
     with open(fileName, 'w') as f:
       f.write(self.textAsm.toPlainText())
 
   def textSrc_change(self):
+    curr = self.textSrc.toPlainText()
+    if (curr == self.last):
+      return
     self.labelFile.setText(os.path.basename(self.fileName)+' *')
+    self.textColored.setHtml(colored_html_from_plain(curr))
+    self.last = curr
 
   def btnCompile_clicked(self):
+    # print(self.textSrc.toPlainText())
+    # print(colored_html_from_plain(self.textSrc.toPlainText()))
+    # print(self.textColored.toPlainText())
     output = get_output(codegen.gen_code, args=(self.textSrc.toPlainText(),))
     self.textAsm.setPlainText(output)
 
@@ -207,8 +326,11 @@ class CompilerPage(QWidget):
 
   def btnSaveFile_clicked(self):
     if self.isNew:
-      self.fileName,_ = QtWidgets.QFileDialog.getSaveFileName(self, "保存文件", os.getcwd(), 
+      fileName,_ = QtWidgets.QFileDialog.getSaveFileName(self, "保存文件", os.getcwd(), 
     "C Source Files(*.c);;All Files(*)")
+      if fileName == '':
+        return
+      self.fileName = fileName
     with open(self.fileName,'w') as f:
       f.write(self.textSrc.toPlainText())
     self.isNew = False
@@ -284,6 +406,8 @@ class MyWindow(QMainWindow):
 
 if __name__=="__main__":
   # print(get_output(codegen.gen_code, args=('int a=1;',)))
+  # quit()
+  
   # quit()
   app=QApplication(sys.argv)
   font = QFont('consolas')
