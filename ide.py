@@ -1,7 +1,8 @@
 from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 import PyQt5.QtWidgets as QtWidgets
-import sys,os
+import sys,os, subprocess
 from io import StringIO 
 from PyQt5 import QtCore
 from multiprocessing import Process, Queue
@@ -53,7 +54,6 @@ def get_output(fn,args):
     p.join()
     return q.get()
     
-
 
 class AssemblePage(QWidget):
   def __init__(self,parent=None):
@@ -180,20 +180,26 @@ def colored_html_from_plain(plain:str) -> str:
   pos = 0
   clex.input(plain)
   def to_html(s):
-    if s=='\n':
-      return '<br>'
-    if s=='\t':
-      return '  '
-    return s
+    d = {
+      '\n':'<br>',
+      '\t':'&nbsp;'*8,
+      ' ':'&nbsp;',
+      '<':'&lt;',
+      '>':'&gt;'
+    }
+    ans = ''
+    for x in s:
+      ans += d.get(x,x)
+    return ans
   for token in iter(clex.token, None):
     # print(token.lineno,token.lexpos,token.type,token.value)
     # print(token)
     dans = ''
     while pos < token.lexpos:
-      dans += to_html(plain[pos])
+      dans += plain[pos]
       pos += 1
-    ans += colored(dans, 'COMMENT')
-    ans += colored(token.value, token.type)
+    ans += colored(to_html(dans), 'COMMENT')
+    ans += colored(to_html(token.value), token.type)
     pos += len(token.value)
   return ans
     
@@ -266,6 +272,7 @@ class CompilerPage(QWidget):
     self.btnOpenFile.clicked.connect(self.btnOpenFile_clicked)
     self.btnSaveFile.clicked.connect(self.btnSaveFile_clicked)
     self.textSrc.textChanged.connect(self.textSrc_change)
+    self.textSrc.keyPressEvent
     self.btnSaveOutput.clicked.connect(self.btnSaveOutput_clicked)
     self.editPanel.currentChanged['int'].connect(self.tabfun)
     self.isBrowser = False
@@ -307,7 +314,22 @@ class CompilerPage(QWidget):
     # print(self.textSrc.toPlainText())
     # print(colored_html_from_plain(self.textSrc.toPlainText()))
     # print(self.textColored.toPlainText())
-    output = get_output(codegen.gen_code, args=(self.textSrc.toPlainText(),))
+    exe = os.path.abspath('./preproc/net5.0/test/a.c')
+    with open(exe, 'w') as f:
+      f.write(self.textSrc.toPlainText())
+    ins = os.path.abspath('./preproc/net5.0/CPreprocressor.exe') + ' ' + exe + ' -f -s error'
+    print(ins)
+    f = os.popen(ins)  
+    data = f.read()  
+    f.close()
+    print (data)
+    if(data.find(':')>0):
+      self.textAsm.setPlainText(data)
+      return
+    exe = os.path.abspath('./preproc/net5.0/test/a.p.cpp')
+    with open(exe, 'r') as f:
+      pp = f.read()
+    output = get_output(codegen.gen_code, args=(pp,))
     self.textAsm.setPlainText(output)
 
   def btnOpenFile_clicked(self):
