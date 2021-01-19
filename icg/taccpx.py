@@ -113,7 +113,8 @@ def label_adjdec(block):   # 去除跳转到自己下一句的情况，主要针
     next = None
     for tac in block.TACs:
         if next is tac and (tac.op=='label' or tac.op=='ret'):
-            new_block.TACs.pop()
+            new_block.TACs.pop()                # 只删goto，标号可能还有其它地方来
+            new_block.appendTAC(tac)
         elif tac.op=='goto' or tac.op=='ifz':
             next = tac.dest.tgt
             new_block.appendTAC(tac)
