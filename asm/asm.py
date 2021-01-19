@@ -82,7 +82,7 @@ def main_process(files, data_start, text_start, args):
     for line in fin:
         x = int(line, 2)
         tot = hex(x)[2:].zfill(8)
-        outstr += tot[0:4] + '\n' + tot[4:8] + '\n'
+        outstr += tot + ',\n'
     
     if outfile == '**memory**':
         print(outstr)
