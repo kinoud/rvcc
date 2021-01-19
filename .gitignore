@@ -1,5 +1,6 @@
 /icg/__pycache__
-/asm/__pycache__
-/link/__pycache__
-/tobin/__pycache__
+/asm/macro/__pycache__
+/asm/link/__pycache__
+/asm/tobin/__pycache__
+/asm/tobin/lib/__pycache__
 ~*
