@@ -104,11 +104,13 @@ class DefaultMacros:
     def macro_li(params):
         assert(len(params)==2)
         x = int(params[1])                          # 暂不考虑在这里支持equ等符号带来变化
-        # if abs(x)>=(1<<11):
-        #    return [
-        #        ["lui", params[0], "%hi("+params[1]+")"],
-        #        ["addi", params[0], params[0], "%lo("+params[1]+")"]
-        #     ]
+        if abs(x)>=(1<<11):
+            hi = x>>12
+            lo = x^hi
+            return [
+                ["lui", params[0], str(hi)],
+                ["addi", params[0], params[0], str(lo)]
+            ]
         # else:                                     # 暂时完全忽略位数不够的情况
         return [["addi", params[0], "$0", params[1]]]
 
