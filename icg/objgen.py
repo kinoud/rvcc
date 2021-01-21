@@ -157,8 +157,8 @@ class ASM_Module():
                     code.args = (code.args[0], var.name)
                 elif code.op=='lw':
                     code.args = (code.args[0], var.name)
-                elif code.op=='sw':
-                    code.args = (code.args[0], var.name, 't4')
+                elif code.op=='sw':                              # 为了配合 sw 参数顺序的问题
+                    code.args = (var.name, code.args[0], 't4')
                 else:
                     print('ASM Error: illegal ref of global symbol.')
 
@@ -407,6 +407,19 @@ class ASM_Module():
 
         self.local_val_mgr.solve_func_var()
 
+    def fix_addi(self):
+        new_code = []
+        for code in self.code:
+            if code.op=='addi':
+                assert(len(code.args)==3)
+                val = int(code.args[2])
+                if abs(val)>=1<<11:
+                    new_code.append(ASM_Line('li', 't4', code.args[2]))
+                    new_code.append(ASM_Line('addi', code.args[0], code.args[1], 't4'))
+                    continue
+            new_code.append(code)
+        self.code = new_code
+
     def del_mv(self):
         new_code = []
         for this_code in self.code:
@@ -555,6 +568,7 @@ class ASM_CTRL():
         func_asm.pick_up_lw()
         func_asm.clear_sw()
         func_asm.del_mv()
+        func_asm.fix_addi()
         # print(func_asm)
         self.funcDefs.append(func_asm.export_as_func())
         self.hasDef[func_decl.name] = True
@@ -608,7 +622,11 @@ class ASM_CTRL():
     def gen_code_text(self):
         text = ''
         for code in self.result:
-            text += str(code) + '\n'
+            if code.op=='sw':         # 为了配合 sw 参数顺序的问题
+                out_code = ASM_Line(code.op, code.args[1], code.args[0], code.args[2])
+            else:
+                out_code = code
+            text += str(out_code) + '\n'
         return text
 
 asm_ctrl = ASM_CTRL()
