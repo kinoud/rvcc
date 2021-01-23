@@ -22,7 +22,10 @@ def ide_main(filename_list, text_start=default_text_start, data_start=default_da
     args = {
         'outfile': outfile
     }
-    main_process(files, data_start, text_start, args)
+    try:
+        main_process(files, data_start, text_start, args)
+    except BaseException as err:
+        print(err)
 
 def get_arguments():
     descr = '''
@@ -47,8 +50,8 @@ def main():
     args = get_arguments()
     infiles = args.INFILEs
     files = []
-    file_unit = gen_segments_from_infile(vars(args)['enter_asm'])
-    files.append(file_unit)
+    #file_unit = gen_segments_from_infile(vars(args)['enter_asm'])
+    #files.append(file_unit)
     for infile in infiles:
         file_unit = gen_segments_from_infile(infile)
         files.append(file_unit)
@@ -64,8 +67,8 @@ def main_process(files, data_start, text_start, args):
 
     text_size, data_size = link(files, data_start, text_start, tmpFile_1)
 
-    print('Text Segment Size: '+str(text_size)+' byte(s)')
-    print('Data Segment Size: '+str(data_size)+' byte(s)')
+    #print('Text Segment Size: '+str(text_size)+' byte(s)')
+    #print('Data Segment Size: '+str(data_size)+' byte(s)')
 
     outfile = args['outfile']
     tmpFile_2 = 'riscv_asm.tmp'
@@ -78,11 +81,13 @@ def main_process(files, data_start, text_start, args):
     except IOError:
         return None
     
-    outstr = 'memory_initialization_radix=16;\nmemory_initialization_vector='
+    outstr = 'memory_initialization_radix=16;\nmemory_initialization_vector=\n'
+    c = 0
     for line in fin:
         x = int(line, 2)
         tot = hex(x)[2:].zfill(8)
         outstr += tot + ',\n'
+        c += 1
     
     if outfile == '**memory**':
         print(outstr)

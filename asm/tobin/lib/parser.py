@@ -516,6 +516,7 @@ def parse_pass_two(fin, fout, symbols_table, args):
     reset_lineno()
     address = 0
     for line in fin:
+        print(line)
         result = parser.parse(line)
         if result is None:
             continue
